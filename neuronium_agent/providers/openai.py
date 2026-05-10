@@ -68,15 +68,22 @@ class OpenAIProvider:
         client_factory: Optional[Callable[[], Any]] = None,
         api_key_env: str = "OPENAI_API_KEY",
         max_tool_iterations: int = 8,
+        mock_mode: bool = False,
     ) -> None:
         self.model_id = model
         self.max_output_tokens = max_output_tokens
         self.api_key_env = api_key_env
         self.max_tool_iterations = max_tool_iterations
+        self.mock_mode = mock_mode
         self._module = _try_import_openai()
         self._init_error: Optional[str] = None
         self._client = client
-        if self._client is None and client_factory is not None:
+        self._mock_delegate = None
+        if mock_mode:
+            from neuronium_agent.providers.mock import MockModelProvider
+
+            self._mock_delegate = MockModelProvider()
+        elif self._client is None and client_factory is not None:
             try:
                 self._client = client_factory()
             except Exception as exc:  # noqa: BLE001
@@ -94,6 +101,8 @@ class OpenAIProvider:
 
     @property
     def ready(self) -> bool:
+        if self.mock_mode:
+            return True
         return self._client is not None and self._init_error is None
 
     def supports(self, role: str) -> bool:
@@ -105,12 +114,23 @@ class OpenAIProvider:
             "ready": self.ready,
             "openai_installed": self._module is not None,
             "model": self.model_id,
+            "mock_mode": self.mock_mode,
             "init_error": self._init_error,
         }
 
     # ---- entry point ----
 
     def generate(self, request: ModelRequest) -> ModelResponse:
+        if self.mock_mode and self._mock_delegate is not None:
+            response = self._mock_delegate.generate(request)
+            return ModelResponse(
+                role=response.role,
+                agent_id=response.agent_id,
+                output=response.output,
+                usage={"input_tokens": 0, "output_tokens": 0, "mock": 1},
+                thinking_summary=None,
+                stop_reason="stop",
+            )
         if not self.ready:
             raise RuntimeError(f"OpenAIProvider not ready: {self._init_error}")
         messages = [

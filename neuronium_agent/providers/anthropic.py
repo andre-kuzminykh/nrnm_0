@@ -117,16 +117,23 @@ class AnthropicProvider:
         client_factory: Optional[Callable[[], Any]] = None,
         max_tool_iterations: int = 8,
         api_key_env: str = "ANTHROPIC_API_KEY",
+        mock_mode: bool = False,
     ) -> None:
         self.model_id = model
         self.max_tokens = max_tokens
         self.enable_prompt_cache = enable_prompt_cache
         self.max_tool_iterations = max_tool_iterations
         self.api_key_env = api_key_env
+        self.mock_mode = mock_mode
         self._anthropic_module = _try_import_anthropic()
         self._init_error: Optional[str] = None
         self._client: Optional[Any] = client
-        if self._client is None and client_factory is not None:
+        self._mock_delegate: Optional[Any] = None
+        if mock_mode:
+            from neuronium_agent.providers.mock import MockModelProvider
+
+            self._mock_delegate = MockModelProvider()
+        elif self._client is None and client_factory is not None:
             try:
                 self._client = client_factory()
             except Exception as exc:  # noqa: BLE001
@@ -146,6 +153,8 @@ class AnthropicProvider:
 
     @property
     def ready(self) -> bool:
+        if self.mock_mode:
+            return True
         return self._client is not None and self._init_error is None
 
     def supports(self, role: str) -> bool:
@@ -157,12 +166,24 @@ class AnthropicProvider:
             "ready": self.ready,
             "anthropic_installed": self._anthropic_module is not None,
             "model": self.model_id,
+            "mock_mode": self.mock_mode,
             "init_error": self._init_error,
         }
 
     # ---- main entry point ----
 
     def generate(self, request: ModelRequest) -> ModelResponse:
+        if self.mock_mode and self._mock_delegate is not None:
+            response = self._mock_delegate.generate(request)
+            # Tag the response so trace shows the simulated provider/model.
+            return ModelResponse(
+                role=response.role,
+                agent_id=response.agent_id,
+                output=response.output,
+                usage={"input_tokens": 0, "output_tokens": 0, "mock": 1},
+                thinking_summary=None,
+                stop_reason="end_turn",
+            )
         if not self.ready:
             raise RuntimeError(
                 f"AnthropicProvider not ready: {self._init_error}"

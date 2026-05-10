@@ -393,6 +393,7 @@ def objective() -> None:
 @click.option("--provider", default="mock", help="Model provider (mock|anthropic|openai|gemini|multi).")
 @click.option("--provider-model", default=None, help="Override model id (e.g. claude-opus-4-7).")
 @click.option("--provider-max-tokens", default=None, type=int, help="Override max_tokens.")
+@click.option("--provider-mock/--no-provider-mock", default=False, help="Make the chosen real provider run in mock mode (no API key needed).")
 @click.option("--real-tools/--no-real-tools", default=False, help="Use real shell+fs tools.")
 @click.option("--cwd", default=None, help="Working directory for real tools.")
 @click.option("--allow-dir", multiple=True, help="Additional allowed root for real fs tools.")
@@ -413,6 +414,7 @@ def objective_run(
     provider: str,
     provider_model: Optional[str],
     provider_max_tokens: Optional[int],
+    provider_mock: bool,
     real_tools: bool,
     cwd: Optional[str],
     allow_dir: tuple,
@@ -436,6 +438,8 @@ def objective_run(
         provider_options["model"] = provider_model
     if provider_max_tokens:
         provider_options["max_tokens"] = provider_max_tokens
+    if provider_mock:
+        provider_options["mock_mode"] = True
     rt_config: Optional[RealToolsConfig] = None
     if real_tools:
         cwd_resolved = cwd or os.getcwd()
@@ -502,6 +506,7 @@ def objective_run(
 @click.option("--provider", default="mock", help="Model provider (mock|anthropic|openai|gemini|multi).")
 @click.option("--provider-model", default=None)
 @click.option("--provider-max-tokens", default=None, type=int)
+@click.option("--provider-mock/--no-provider-mock", default=False, help="Run real provider in mock mode (no API key needed).")
 @click.option("--real-tools/--no-real-tools", default=False, help="Use real shell+fs tools.")
 @click.option("--cwd", default=None, help="Working directory for real tools (defaults to .).")
 @click.option("--allow-dir", multiple=True, help="Additional allowed root for real fs tools.")
@@ -520,6 +525,7 @@ def code(
     provider: str,
     provider_model: Optional[str],
     provider_max_tokens: Optional[int],
+    provider_mock: bool,
     real_tools: bool,
     cwd: Optional[str],
     allow_dir: tuple,
@@ -536,6 +542,8 @@ def code(
         provider_options["model"] = provider_model
     if provider_max_tokens:
         provider_options["max_tokens"] = provider_max_tokens
+    if provider_mock:
+        provider_options["mock_mode"] = True
     rt_config: Optional[RealToolsConfig] = None
     if real_tools:
         cwd_resolved = cwd or os.getcwd()

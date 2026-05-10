@@ -185,6 +185,8 @@ Four providers ship:
 
 Per-agent routing in pack DSL: `model: anthropic:claude-opus-4-7` / `openai:gpt-4o` / `gemini:2.5-pro`. Spec: `docs/specs/model_routing.md`.
 
+**Credential-less development.** Each real provider accepts `mock_mode=True`. Pass `--provider anthropic --provider-mock` to develop multi-provider flows without API keys; trace records the simulated provider/model just as it would live calls.
+
 Per the official Claude API guidance the provider is configured with:
 
 - model `claude-opus-4-7`;

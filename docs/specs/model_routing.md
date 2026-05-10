@@ -78,6 +78,30 @@ or temperature can be overridden via `provider_options`.
 - **Strict JSON extraction at scale** → `openai:gpt-4o` with `response_format: json_schema`.
 - **Reasoning-heavy critic / second-opinion** → `anthropic:claude-opus-4-7`.
 
+## Credential-less development (`mock_mode`)
+
+While developing flows, packs, or provider routing without real API keys,
+every real provider accepts `mock_mode=True`:
+
+- Construction succeeds with no `*_API_KEY` env var.
+- `provider.ready` is `True`.
+- `generate()` delegates to `MockModelProvider`, returning the same
+  deterministic agent-keyed outputs the test suite uses.
+- Trace still records the chosen provider name (`anthropic` / `openai` /
+  `gemini`) and the simulated model id, so multi-provider routing,
+  per-agent `model:` overrides, and `provider.selected` events all behave
+  identically — they just run against the simulator.
+
+CLI:
+
+```bash
+neuronium-agent objective run "..." --provider anthropic --provider-mock
+neuronium-agent code "..." --repl --provider openai --provider-mock
+```
+
+Drop `--provider-mock` once a real key arrives — the rest of the call is the
+same.
+
 ## Configuration discovery
 
 ```bash
