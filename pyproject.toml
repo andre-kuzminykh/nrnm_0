@@ -30,6 +30,9 @@ langgraph = [
 raganything = [
     "raganything[all]>=0.1",
 ]
+anthropic = [
+    "anthropic>=0.40",
+]
 
 [project.scripts]
 neuronium-agent = "neuronium_agent.cli.main:main"

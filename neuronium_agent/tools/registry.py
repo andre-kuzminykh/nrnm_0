@@ -14,6 +14,8 @@ class ToolDescriptor(BaseModel):
     risk: str = "low"
     schema_version: str = "0.1"
     fn: Optional[Callable[..., Any]] = None
+    description: str = ""
+    input_schema: Optional[Dict[str, Any]] = None
 
 
 class ToolRegistry:
@@ -28,9 +30,17 @@ class ToolRegistry:
         kind: str = "mock",
         risk: str = "low",
         schema_version: str = "0.1",
+        description: str = "",
+        input_schema: Optional[Dict[str, Any]] = None,
     ) -> None:
         self._tools[ref] = ToolDescriptor(
-            ref=ref, fn=fn, kind=kind, risk=risk, schema_version=schema_version
+            ref=ref,
+            fn=fn,
+            kind=kind,
+            risk=risk,
+            schema_version=schema_version,
+            description=description,
+            input_schema=input_schema,
         )
 
     def has(self, ref: str) -> bool:

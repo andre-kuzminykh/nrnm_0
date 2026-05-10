@@ -387,6 +387,9 @@ def objective() -> None:
 @click.option("--memory-working-dir", default=None, help="Backend working directory.")
 @click.option("--memory-parser", default="mineru", help="Parser for raganything.")
 @click.option("--memory-query-mode", default="hybrid", help="Query mode (raganything).")
+@click.option("--provider", default="mock", help="Model provider (mock|anthropic).")
+@click.option("--provider-model", default=None, help="Override model id (e.g. claude-opus-4-7).")
+@click.option("--provider-max-tokens", default=None, type=int, help="Override max_tokens.")
 def objective_run(
     objective_text: str,
     pack_id: Optional[str],
@@ -399,6 +402,9 @@ def objective_run(
     memory_working_dir: Optional[str],
     memory_parser: str,
     memory_query_mode: str,
+    provider: str,
+    provider_model: Optional[str],
+    provider_max_tokens: Optional[int],
 ) -> None:
     """Run a free-text objective through the platform."""
     parsed_inputs = {}
@@ -412,10 +418,17 @@ def objective_run(
     memory_config = _memory_config_from_options(
         memory_backend, memory_working_dir, memory_parser, memory_query_mode
     )
+    provider_options: dict = {}
+    if provider_model:
+        provider_options["model"] = provider_model
+    if provider_max_tokens:
+        provider_options["max_tokens"] = provider_max_tokens
     runner = ObjectiveRunner(
         trace_dir=trace_dir,
         auto_approve=auto_approve,
         memory_config=memory_config,
+        provider=provider,
+        provider_options=provider_options,
     )
     try:
         result = runner.run(objective_text, pack_id=pack_id, inputs=parsed_inputs)
@@ -461,6 +474,9 @@ def objective_run(
 @click.option("--memory-working-dir", default=None)
 @click.option("--memory-parser", default="mineru")
 @click.option("--memory-query-mode", default="hybrid")
+@click.option("--provider", default="mock", help="Model provider (mock|anthropic).")
+@click.option("--provider-model", default=None)
+@click.option("--provider-max-tokens", default=None, type=int)
 def code(
     objective_text: Optional[str],
     pack_id: str,
@@ -470,14 +486,26 @@ def code(
     memory_working_dir: Optional[str],
     memory_parser: str,
     memory_query_mode: str,
+    provider: str,
+    provider_model: Optional[str],
+    provider_max_tokens: Optional[int],
 ) -> None:
     """Interactive coding mode (single-shot in v0.1)."""
     text = objective_text or "Help me with this codebase"
     memory_config = _memory_config_from_options(
         memory_backend, memory_working_dir, memory_parser, memory_query_mode
     )
+    provider_options: dict = {}
+    if provider_model:
+        provider_options["model"] = provider_model
+    if provider_max_tokens:
+        provider_options["max_tokens"] = provider_max_tokens
     runner = ObjectiveRunner(
-        trace_dir=trace_dir, auto_approve=mock, memory_config=memory_config
+        trace_dir=trace_dir,
+        auto_approve=mock,
+        memory_config=memory_config,
+        provider=provider,
+        provider_options=provider_options,
     )
     try:
         result = runner.run(text, pack_id=pack_id)
@@ -511,6 +539,24 @@ def doctor() -> None:
         console.print(
             "[yellow]raganything: not installed[/yellow] "
             "(install with `pip install 'raganything[all]'` to enable RAG-Anything backend)"
+        )
+    try:
+        import importlib
+
+        importlib.import_module("anthropic")
+        if os.environ.get("ANTHROPIC_API_KEY"):
+            console.print(
+                "[green]anthropic: installed[/green] (ANTHROPIC_API_KEY present — "
+                "`--provider anthropic` ready)"
+            )
+        else:
+            console.print(
+                "[yellow]anthropic: installed but ANTHROPIC_API_KEY not set[/yellow]"
+            )
+    except Exception:  # noqa: BLE001
+        cmd = "pip install 'neuronium-agent[anthropic]'"
+        console.print(
+            f"[yellow]anthropic: not installed[/yellow] (install with `{cmd}` to enable real Claude calls)"
         )
     leaks = []
     for env_key in ("OPENAI_API_KEY", "ANTHROPIC_API_KEY"):

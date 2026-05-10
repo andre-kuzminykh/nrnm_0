@@ -69,6 +69,20 @@ Every requirement maps to at least one test. Tests run in mock mode only.
 | NR-IT-PLAN-004 | IR nodes carry task_path metadata | NR-FR-PLAN-008 |
 | NR-IT-PLAN-005 | Implicit plan fallback | NR-FR-PLAN-011 |
 
+## Anthropic provider
+
+| ID | Subject | Requirement |
+| --- | --- | --- |
+| NR-UT-ANTH-001 | Provider not ready without anthropic; generate raises | NR-FR-PROV-011 |
+| NR-UT-ANTH-002 | Request shape: model, no sampling, adaptive thinking + summarized, effort per role, cache_control | NR-FR-PROV-002..007 |
+| NR-UT-ANTH-003 | Tool-use loop drives executor; tool_result round-trips | NR-FR-PROV-009 |
+| NR-UT-ANTH-004 | Executor error → is_error tool_result | NR-FR-PROV-009 |
+| NR-UT-ANTH-005 | Tool iteration cap | NR-FR-PROV-009 |
+| NR-UT-ANTH-006 | Thinking blocks accumulate into thinking_summary | NR-FR-PROV-010 |
+| NR-UT-ANTH-007 | JSON parser handles fenced / prose / fallback text | NR-FR-PROV-008 |
+| NR-UT-ANTH-008 | Usage accumulates across iterations | NR-FR-PROV-010 |
+| NR-IT-ANTH-001 | Coding pack runs end-to-end with injected anthropic fake | NR-FR-PROV-014, NR-FR-PROV-015 |
+
 ## Memory / RAG-Anything
 
 | ID | Subject | Requirement |

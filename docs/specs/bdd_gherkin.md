@@ -166,6 +166,51 @@ Feature: Implicit plan fallback
     And the implicit method choice should be "implicit_sequence"
 ```
 
+## Anthropic provider
+
+```gherkin
+@NR-BDD-ANTH-001 @NR-FR-PROV-002 @NR-FR-PROV-003 @NR-FR-PROV-004 @NR-UT-ANTH-002
+Feature: Opus 4.7 defaults
+  Scenario: Provider sends adaptive thinking and no sampling params
+    Given the AnthropicProvider is configured with a fake client
+    When generate is invoked for a planner role
+    Then the outgoing request should use model "claude-opus-4-7"
+    And the thinking field should be {type: "adaptive", display: "summarized"}
+    And temperature, top_p, and top_k should be absent
+    And effort should be "xhigh"
+```
+
+```gherkin
+@NR-BDD-ANTH-002 @NR-FR-PROV-007 @NR-UT-ANTH-002
+Feature: Prompt caching
+  Scenario: System prefix is cached, state is not
+    Given the AnthropicProvider is configured with prompt caching enabled
+    When generate is invoked
+    Then cache_control should be present on the last system block
+    And the state JSON should appear in the user message, not the system
+```
+
+```gherkin
+@NR-BDD-ANTH-003 @NR-FR-PROV-009 @NR-UT-ANTH-003
+Feature: Tool-use loop
+  Scenario: Model requests a tool then returns final JSON
+    Given the AnthropicProvider receives a scripted tool_use then end_turn
+    When generate runs with an injected tool_executor
+    Then the executor should be invoked with the model-supplied input
+    And the second API call should carry a tool_result block
+    And the final output should be the JSON object the model returned
+```
+
+```gherkin
+@NR-BDD-ANTH-004 @NR-FR-PROV-011 @NR-FR-PROV-013 @NR-UT-ANTH-001
+Feature: Optional dependency
+  Scenario: anthropic not installed
+    Given the anthropic package is not importable
+    When AnthropicProvider is constructed without a client
+    Then ready should be false
+    And doctor should print an install hint
+```
+
 ## Memory / RAG-Anything
 
 ```gherkin

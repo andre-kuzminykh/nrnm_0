@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Dict, Optional
+from typing import Any, Dict, Optional
 
 from neuronium_agent.providers.base import ModelProvider, ModelRequest, ModelResponse
 from neuronium_agent.providers.mock import MockModelProvider
@@ -33,11 +33,41 @@ class ModelRegistry:
             raise KeyError(f"provider '{provider_name}' not registered")
         return self._providers[provider_name]
 
+    def has_provider(self, name: str) -> bool:
+        return name in self._providers
+
     def generate(self, alias: str, request: ModelRequest) -> ModelResponse:
         return self.get_provider(alias).generate(request)
 
 
-def default_registry(force_failure_first: bool = False) -> ModelRegistry:
+def default_registry(
+    force_failure_first: bool = False,
+    *,
+    provider: str = "mock",
+    provider_options: Optional[Dict[str, Any]] = None,
+) -> ModelRegistry:
+    """Build a model registry seeded with the requested provider.
+
+    The mock provider is always registered so `provider="anthropic"` can fall
+    back to deterministic mock outputs in tests / CI.
+    """
     registry = ModelRegistry()
-    registry.register_provider("mock", MockModelProvider(force_failure_first=force_failure_first))
+    registry.register_provider(
+        "mock", MockModelProvider(force_failure_first=force_failure_first)
+    )
+    if provider == "anthropic":
+        try:
+            from neuronium_agent.providers.anthropic import AnthropicProvider
+
+            options = dict(provider_options or {})
+            anthropic_provider = AnthropicProvider(**options)
+            registry.register_provider("anthropic", anthropic_provider)
+            if anthropic_provider.ready:
+                for role in ("fast", "smart", "cheap", "critic"):
+                    registry.set_alias(role, "anthropic")
+        except Exception:  # noqa: BLE001
+            pass
+    elif provider != "mock":
+        # Unknown provider: keep mock as the active backend.
+        pass
     return registry

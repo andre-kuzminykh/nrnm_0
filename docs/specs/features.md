@@ -144,6 +144,11 @@ Legend: **MVP** implemented in v0.1 (mock mode), **SPEC** specified only, **PLAN
 | NR-F-101 | Model aliases | MVP |
 | NR-F-102 | Provider routing | MVP |
 | NR-F-103 | Model roles: fast, smart, cheap, critic | MVP |
+| NR-F-104 | AnthropicProvider (Opus 4.7, adaptive thinking, effort, streaming) | MVP |
+| NR-F-105 | Prompt caching on system prefix | MVP |
+| NR-F-106 | Structured output via JSON schema from OutputContract | MVP |
+| NR-F-107 | Tool-use loop with PolicyEngine + human gates | MVP |
+| NR-F-108 | Token / thinking / tool-call streaming into trace | MVP |
 
 ## MCP tools
 

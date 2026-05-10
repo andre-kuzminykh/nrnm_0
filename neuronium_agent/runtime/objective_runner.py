@@ -55,6 +55,8 @@ class ObjectiveRunner:
         force_failure_first: bool = False,
         memory: Optional[MemoryBackend] = None,
         memory_config: Optional[MemoryConfig] = None,
+        provider: str = "mock",
+        provider_options: Optional[Dict[str, Any]] = None,
     ) -> None:
         self.registry = registry or PackRegistry()
         self.trace_dir = trace_dir
@@ -62,6 +64,8 @@ class ObjectiveRunner:
         self.force_failure_first = force_failure_first
         self.memory = memory
         self.memory_config = memory_config or MemoryConfig()
+        self.provider = provider
+        self.provider_options = provider_options or {}
 
     def _select_pack(self, objective: str, pack_id: Optional[str]) -> CompiledPack:
         if pack_id:
@@ -184,6 +188,17 @@ class ObjectiveRunner:
             force_failure_first=self.force_failure_first,
             memory=memory,
             memory_config=self.memory_config,
+            provider=self.provider,
+            provider_options=self.provider_options,
+        )
+        events.emit(
+            "provider.selected",
+            {
+                "provider": self.provider,
+                "options": {
+                    k: v for k, v in self.provider_options.items() if k != "client"
+                },
+            },
         )
 
         # Select & compile IR

@@ -174,6 +174,34 @@ tasks:
 
 Packs without `tasks:` keep working — a depth-1 implicit plan is generated automatically. Full spec: `docs/specs/hierarchical_planning.md`.
 
+## Model providers
+
+Two providers ship:
+
+- `mock` — deterministic, used in `--mock` runs and CI (default).
+- `anthropic` — real Claude calls (Opus 4.7 by default). Optional dep: `pip install "neuronium-agent[anthropic]"`. Requires `ANTHROPIC_API_KEY`.
+
+Per the official Claude API guidance the provider is configured with:
+
+- model `claude-opus-4-7`;
+- adaptive thinking with `display: "summarized"` (so reasoning lands in the trace);
+- per-role `effort` (`xhigh` for coding/agentic / critic / planner / researcher, `high` for executor / recovery, `low` for fast);
+- streaming under the hood via `messages.stream().get_final_message()`;
+- prompt caching with top-level `cache_control: {type: "ephemeral"}` on the last system block;
+- per-agent `OutputContract` translated into `output_config.format = {type: "json_schema", schema: ...}`;
+- a tool-use loop that routes every model-issued tool call back through Neuronium's `PolicyEngine` and human gates — same governance as IR `ToolNode`s.
+
+Run with real Claude:
+
+```bash
+export ANTHROPIC_API_KEY=...
+neuronium-agent objective run "Fix failing tests" --pack coding \
+    --provider anthropic --provider-model claude-opus-4-7
+neuronium-agent code "fix this bug" --provider anthropic
+```
+
+`doctor` reports both `anthropic` install state and whether `ANTHROPIC_API_KEY` is set. Full spec: `docs/specs/anthropic_provider.md`.
+
 ## Memory backends (RAG)
 
 The memory layer is pluggable. Two backends ship:

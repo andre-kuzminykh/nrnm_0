@@ -28,7 +28,7 @@ from neuronium_agent.memory.artifact_graph import Artifact, ArtifactGraph
 from neuronium_agent.memory.backend import MemoryBackend, MemoryConfig, build_backend
 from neuronium_agent.memory.graphrag import MockGraphRAG, RetrievalQuery
 from neuronium_agent.providers.base import ModelRequest
-from neuronium_agent.providers.registry import ModelRegistry, default_registry
+from neuronium_agent.providers.registry import ModelRegistry, default_registry  # noqa: F401
 from neuronium_agent.runtime.events import EventBus
 from neuronium_agent.tools.governance import PermissionDecision, PolicyEngine
 from neuronium_agent.tools.registry import ToolRegistry
@@ -89,12 +89,17 @@ class Runtime(BaseModel):
             },
         )
         prompt_text = compose_prompt(instance, state)
+        agent_tools = self._build_provider_tools_for_agent(instance.definition)
         request = ModelRequest(
             role=instance.definition.role.value,
             agent_id=instance.definition.id,
             prompt=prompt_text,
             state=dict(state),
             expected_keys=node.outputs,
+            tools=agent_tools,
+            tool_executor=self._make_agent_tool_executor(instance.definition, node),
+            output_contract=instance.definition.output_contract,
+            trace_emit=self._trace_emit,
         )
         response = self.models.generate(instance.definition.model, request)
         output = response.output
@@ -268,6 +273,103 @@ class Runtime(BaseModel):
         )
         return {"recovery_strategy": node.strategy}
 
+    # ---- provider integration helpers ----
+
+    def _trace_emit(self, kind: str, payload: Dict[str, Any]) -> None:
+        """Trace adapter passed to providers for token / tool / thinking events."""
+        try:
+            self.events.emit(kind, payload)
+        except Exception:  # noqa: BLE001
+            pass
+
+    def _build_provider_tools_for_agent(self, definition: Any) -> List[Dict[str, Any]]:
+        """Translate the agent's declared tools into Anthropic-compatible specs.
+
+        Each tool ref `<server>.<tool>` becomes `{name, description, input_schema}`.
+        Tools with explicit `input_schema` on their `ToolDescriptor` use that; the
+        rest get a permissive open-object schema.
+        """
+        specs: List[Dict[str, Any]] = []
+        for tool_ref in getattr(definition, "tools", []) or []:
+            if not self.tools.has(tool_ref):
+                continue
+            descriptor = self.tools.descriptor(tool_ref)
+            schema = getattr(descriptor, "input_schema", None) or {
+                "type": "object",
+                "properties": {},
+                "additionalProperties": True,
+            }
+            name = tool_ref.replace(".", "__")
+            specs.append(
+                {
+                    "name": name,
+                    "description": getattr(descriptor, "description", "") or tool_ref,
+                    "input_schema": schema,
+                }
+            )
+        return specs
+
+    def _make_agent_tool_executor(
+        self, definition: Any, node: ModelNode
+    ) -> Any:
+        """Return a synchronous tool executor closure used by the model provider.
+
+        Translates the Anthropic-namespaced tool name back into the Neuronium
+        `<server>.<tool>` ref, resolves the policy (with human gate for
+        `require_approval`), and invokes the tool through the registry.
+        """
+        agent_id = definition.id
+
+        def _executor(tool_name: str, tool_input: Dict[str, Any]) -> Any:
+            ref = tool_name.replace("__", ".")
+            decision = self.policy.resolve(ref, agent_id=agent_id)
+            self.events.emit(
+                "tool.requested",
+                {
+                    "tool_ref": ref,
+                    "agent_id": agent_id,
+                    "node_id": node.id,
+                    "decision": decision.value,
+                    "via": "model_loop",
+                },
+            )
+            if decision == PermissionDecision.DENY:
+                self.events.emit("tool.denied", {"tool_ref": ref, "agent_id": agent_id})
+                raise PermissionError(f"tool '{ref}' denied by policy")
+            if decision == PermissionDecision.REQUIRE_APPROVAL:
+                approved = self.gate.request(
+                    tool_ref=ref,
+                    agent_id=agent_id,
+                    message=(
+                        f"Approve use of tool '{ref}' by agent '{agent_id}' "
+                        "(requested by the model)?"
+                    ),
+                )
+                if not approved:
+                    self.events.emit(
+                        "tool.denied",
+                        {"tool_ref": ref, "agent_id": agent_id, "by": "human"},
+                    )
+                    raise PermissionError(f"tool '{ref}' not approved")
+                self.events.emit(
+                    "tool.approved", {"tool_ref": ref, "agent_id": agent_id}
+                )
+            if not self.tools.has(ref):
+                raise KeyError(f"tool '{ref}' not registered")
+            result = self.tools.call(ref, **tool_input)
+            self.events.emit(
+                "tool.completed",
+                {
+                    "tool_ref": ref,
+                    "via": "model_loop",
+                    "agent_id": agent_id,
+                    "keys": list(result.keys()) if isinstance(result, dict) else [],
+                },
+            )
+            return result
+
+        return _executor
+
     def run_terminal(self, node: TerminalNode, state: Dict[str, Any]) -> Dict[str, Any]:
         report = render_final_outcome(state, template_id=node.outcome_template)
         artifact = Artifact(
@@ -344,8 +446,16 @@ def build_default_runtime(
     force_failure_first: bool = False,
     memory: Optional[MemoryBackend] = None,
     memory_config: Optional[MemoryConfig] = None,
+    provider: str = "mock",
+    provider_options: Optional[Dict[str, Any]] = None,
+    models: Optional[ModelRegistry] = None,
 ) -> Runtime:
-    models = default_registry(force_failure_first=force_failure_first)
+    if models is None:
+        models = default_registry(
+            force_failure_first=force_failure_first,
+            provider=provider,
+            provider_options=provider_options or {},
+        )
     tool_registry = ToolRegistry()
     MockMCP().register_default(tool_registry)
     if memory is None:

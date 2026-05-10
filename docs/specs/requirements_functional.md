@@ -93,6 +93,24 @@
 - **NR-FR-GRAG-004** Evaluate artifact-reference preservation.
 - **NR-FR-GRAG-005** Emit retrieval diagnostics.
 
+## Model providers
+
+- **NR-FR-PROV-001** Provide an `AnthropicProvider` implementing `ModelProvider`.
+- **NR-FR-PROV-002** Default to `claude-opus-4-7`.
+- **NR-FR-PROV-003** Send `thinking={type: "adaptive", display: "summarized"}` for reasoning-eligible roles.
+- **NR-FR-PROV-004** Never send `temperature`, `top_p`, or `top_k` (removed on Opus 4.7).
+- **NR-FR-PROV-005** Route role → `effort`: critic/planner/researcher/designer → `xhigh`; executor/recovery/curator → `high`; `fast` → `low`.
+- **NR-FR-PROV-006** Stream every API call via `messages.stream().get_final_message()`.
+- **NR-FR-PROV-007** Apply prompt caching via top-level `cache_control: {type: "ephemeral"}` on the last system block.
+- **NR-FR-PROV-008** Convert each agent's `OutputContract` into a JSON schema for `output_config.format`.
+- **NR-FR-PROV-009** Run a tool-use loop with the runtime-injected executor; honor `PolicyEngine` and human gates per call; cap iterations.
+- **NR-FR-PROV-010** Accumulate `usage` across loop iterations and expose `thinking_summary` on `ModelResponse`.
+- **NR-FR-PROV-011** Optional dependency: import without `anthropic` installed; report `ready=False` cleanly.
+- **NR-FR-PROV-012** Accept a pre-built `client` or `client_factory` for test injection.
+- **NR-FR-PROV-013** Surface installation status via `doctor`.
+- **NR-FR-PROV-014** Expose provider selection via CLI flags `--provider`, `--provider-model`, `--provider-max-tokens`.
+- **NR-FR-PROV-015** Emit a `provider.selected` trace event with the resolved provider name and non-secret options.
+
 ## Hierarchical planning (HTN)
 
 - **NR-FR-PLAN-001** The system shall provide an HTN planner with `compound` / `primitive` tasks.

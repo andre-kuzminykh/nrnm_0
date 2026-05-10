@@ -43,13 +43,17 @@ def run_objective(
     force_failure_first: bool = False,
     memory: Optional[MemoryBackend] = None,
     memory_config: Optional[MemoryConfig] = None,
+    provider: str = "mock",
+    provider_options: Optional[Dict[str, Any]] = None,
 ) -> RunResult:
     """Run an objective with the chosen pack.
 
     `mock=True` is the default in v0.1: it uses the deterministic mock model
-    provider and mock MCP tools. Memory defaults to the mock GraphRAG backend
-    but can be switched to `raganything` (or any registered backend) by passing
-    a `MemoryConfig` or a pre-built `memory` instance.
+    provider and mock MCP tools. Set `provider="anthropic"` to call real
+    Claude (Opus 4.7 by default — see `neuronium_agent.providers.anthropic`).
+    Memory defaults to the mock GraphRAG backend but can be switched to
+    `raganything` (or any registered backend) by passing a `MemoryConfig` or
+    a pre-built `memory` instance.
     """
     if auto_approve is None:
         auto_approve = mock
@@ -59,5 +63,7 @@ def run_objective(
         force_failure_first=force_failure_first,
         memory=memory,
         memory_config=memory_config,
+        provider=provider,
+        provider_options=provider_options or {},
     )
     return runner.run(objective, pack_id=pack, inputs=inputs)
