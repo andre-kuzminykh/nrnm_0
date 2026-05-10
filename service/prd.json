@@ -1,0 +1,142 @@
+{
+  "product_name": "Neuronium Companion Backend",
+  "product_overview": "FastAPI-сервис, обслуживающий Telegram-бот: регистрация пользователей и базовые операции. Бот общается с этим сервисом только по HTTP.",
+  "features": [
+    {
+      "feature_id": "F001",
+      "general_info": {
+        "name": "Регистрация пользователя по Telegram ID",
+        "overview": "Сервис принимает Telegram-идентификатор и (опционально) username, при первом обращении создаёт запись, при повторном возвращает существующую."
+      },
+      "goal_and_context": {
+        "business_goal": "Дать боту устойчивое представление о пользователе без дублирования записей и без необходимости держать БД в боте.",
+        "user_problem": "Пользователь нажимает /start; бот должен знать, новый он или вернувшийся."
+      },
+      "actors_and_roles": {
+        "primary_user": "Telegram-пользователь",
+        "secondary_user": null,
+        "system_service": "Telegram-бот (HTTP-клиент)"
+      },
+      "business_rules": [
+        {
+          "rule_id": "BR001",
+          "description": "Telegram ID уникален. Повторный POST с тем же tg_id возвращает существующего пользователя и created=false."
+        },
+        {
+          "rule_id": "BR002",
+          "description": "Username хранится без префикса '@'. Может отсутствовать."
+        },
+        {
+          "rule_id": "BR003",
+          "description": "tg_id должен быть положительным целым числом."
+        }
+      ],
+      "acceptance_criteria": [
+        {
+          "scenario_id": "SC001",
+          "user_story": "Как новый пользователь, я отправляю свой tg_id и получаю созданную запись с created=true.",
+          "bdd": {
+            "given": "В БД нет пользователя с tg_id=123",
+            "and_preconditions": ["Запрос содержит валидный tg_id=123 и username='alice'"],
+            "when": "Клиент шлёт POST /api/v1/users с этими данными",
+            "then": "Сервер отвечает 201, telegram_id=123, username='alice', created=true",
+            "and_postconditions": ["В БД появилась запись с tg_id=123"]
+          }
+        },
+        {
+          "scenario_id": "SC002",
+          "user_story": "Как вернувшийся пользователь, я получаю свою существующую запись и created=false.",
+          "bdd": {
+            "given": "В БД уже есть пользователь с tg_id=123, username='alice'",
+            "and_preconditions": [],
+            "when": "Клиент шлёт POST /api/v1/users с tg_id=123",
+            "then": "Сервер отвечает 200, telegram_id=123, created=false",
+            "and_postconditions": ["Количество записей в БД не изменилось"]
+          }
+        },
+        {
+          "scenario_id": "SC003",
+          "user_story": "Как клиент, я получаю 422 при невалидном tg_id.",
+          "bdd": {
+            "given": "Запрос содержит tg_id=-1",
+            "and_preconditions": [],
+            "when": "Клиент шлёт POST /api/v1/users",
+            "then": "Сервер отвечает 422 (validation error)",
+            "and_postconditions": ["В БД не создалось ничего"]
+          }
+        },
+        {
+          "scenario_id": "SC004",
+          "user_story": "Как клиент, я могу получить пользователя по tg_id.",
+          "bdd": {
+            "given": "В БД есть пользователь с tg_id=123",
+            "and_preconditions": [],
+            "when": "Клиент шлёт GET /api/v1/users/123",
+            "then": "Сервер отвечает 200, telegram_id=123",
+            "and_postconditions": []
+          }
+        }
+      ],
+      "non_functional_requirements": [
+        {
+          "nfr_id": "NFR001",
+          "type": "performance",
+          "description": "POST /users < 100ms p95 на SQLite (dev)."
+        },
+        {
+          "nfr_id": "NFR002",
+          "type": "reliability",
+          "description": "Идемпотентность POST по tg_id (BR001) обязательна."
+        }
+      ],
+      "test_cases": [
+        {
+          "test_id": "T001",
+          "scenario_id": "SC001",
+          "setup": "Чистая БД",
+          "action": "POST /api/v1/users {tg_id:123, username:'alice'}",
+          "assertion": "status=201, body.created=true, body.telegram_id=123",
+          "examples": [
+            {
+              "input": {"tg_id": 123, "username": "alice"},
+              "expected": {"status": 201, "created": true, "telegram_id": 123, "username": "alice"}
+            }
+          ]
+        },
+        {
+          "test_id": "T002",
+          "scenario_id": "SC002",
+          "setup": "В БД пользователь tg_id=123",
+          "action": "POST /api/v1/users {tg_id:123, username:'alice'}",
+          "assertion": "status=200, body.created=false",
+          "examples": [
+            {
+              "input": {"tg_id": 123, "username": "alice"},
+              "expected": {"status": 200, "created": false, "telegram_id": 123}
+            }
+          ]
+        },
+        {
+          "test_id": "T003",
+          "scenario_id": "SC003",
+          "setup": "Чистая БД",
+          "action": "POST /api/v1/users {tg_id:-1}",
+          "assertion": "status=422",
+          "examples": [
+            {"input": {"tg_id": -1, "username": "alice"}, "expected": {"status": 422}}
+          ]
+        },
+        {
+          "test_id": "T004",
+          "scenario_id": "SC004",
+          "setup": "В БД пользователь tg_id=123",
+          "action": "GET /api/v1/users/123",
+          "assertion": "status=200, body.telegram_id=123",
+          "examples": [
+            {"input": {"tg_id": 123}, "expected": {"status": 200, "telegram_id": 123}}
+          ]
+        }
+      ]
+    }
+  ]
+}

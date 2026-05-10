@@ -1,0 +1,102 @@
+{
+  "product_name": "Neuronium Companion Bot",
+  "product_overview": "Telegram-бот на aiogram 3, виджетная архитектура. Не содержит БД; общается с бэкенд-сервисом по HTTP.",
+  "features": [
+    {
+      "feature_id": "F001",
+      "general_info": {
+        "name": "Команда /start",
+        "overview": "При /start бот регистрирует пользователя в бэкенде и показывает приветствие: 'добро пожаловать' (новому) или 'с возвращением' (существующему)."
+      },
+      "goal_and_context": {
+        "business_goal": "Дать пользователю первый осмысленный экран и зафиксировать его в системе.",
+        "user_problem": "После запуска бота человеку нужно понять, в каком он состоянии и что делать дальше."
+      },
+      "actors_and_roles": {
+        "primary_user": "Telegram-пользователь",
+        "secondary_user": null,
+        "system_service": "Backend (POST /api/v1/users)"
+      },
+      "business_rules": [
+        {
+          "rule_id": "BR001",
+          "description": "Перед показом приветствия бот должен дернуть бэкенд и понять created=true/false."
+        },
+        {
+          "rule_id": "BR002",
+          "description": "Если бэкенд недоступен — бот показывает экран 'service_unavailable' и логирует ошибку."
+        }
+      ],
+      "acceptance_criteria": [
+        {
+          "scenario_id": "SC001",
+          "user_story": "Как новый пользователь, я делаю /start и вижу 'Добро пожаловать'.",
+          "bdd": {
+            "given": "Я никогда не запускал бота",
+            "and_preconditions": ["Бэкенд возвращает created=true"],
+            "when": "Я отправляю /start",
+            "then": "Бот отвечает экраном welcome_new",
+            "and_postconditions": ["В бэкенде есть запись с моим tg_id"]
+          }
+        },
+        {
+          "scenario_id": "SC002",
+          "user_story": "Как вернувшийся пользователь, я вижу 'С возвращением'.",
+          "bdd": {
+            "given": "Я уже регистрировался ранее",
+            "and_preconditions": ["Бэкенд возвращает created=false"],
+            "when": "Я отправляю /start",
+            "then": "Бот отвечает экраном welcome_back",
+            "and_postconditions": []
+          }
+        },
+        {
+          "scenario_id": "SC003",
+          "user_story": "При недоступном бэкенде я вижу понятное сообщение об ошибке.",
+          "bdd": {
+            "given": "Бэкенд недоступен (httpx бросает RequestError)",
+            "and_preconditions": [],
+            "when": "Я отправляю /start",
+            "then": "Бот отвечает экраном service_unavailable",
+            "and_postconditions": []
+          }
+        }
+      ],
+      "non_functional_requirements": [
+        {"nfr_id": "NFR001", "type": "ux", "description": "Ответ на /start < 1s при здоровом бэкенде."}
+      ],
+      "test_cases": [
+        {
+          "test_id": "T001",
+          "scenario_id": "SC001",
+          "setup": "Мок-API users.register возвращает {created: true, telegram_id: 123}",
+          "action": "Виджет F001 обрабатывает /start от user_id=123",
+          "assertion": "Вызван welcome_new_answer.run; ни welcome_back, ни service_unavailable.",
+          "examples": [
+            {"input": {"tg_id": 123, "api_result": {"created": true}}, "expected": {"answer": "welcome_new"}}
+          ]
+        },
+        {
+          "test_id": "T002",
+          "scenario_id": "SC002",
+          "setup": "Мок-API users.register возвращает {created: false, telegram_id: 123}",
+          "action": "Виджет F001 обрабатывает /start от user_id=123",
+          "assertion": "Вызван welcome_back_answer.run",
+          "examples": [
+            {"input": {"tg_id": 123, "api_result": {"created": false}}, "expected": {"answer": "welcome_back"}}
+          ]
+        },
+        {
+          "test_id": "T003",
+          "scenario_id": "SC003",
+          "setup": "Мок-API users.register бросает RequestError",
+          "action": "Виджет F001 обрабатывает /start",
+          "assertion": "Вызван service_unavailable_answer.run",
+          "examples": [
+            {"input": {"tg_id": 123, "api_error": "RequestError"}, "expected": {"answer": "service_unavailable"}}
+          ]
+        }
+      ]
+    }
+  ]
+}

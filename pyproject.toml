@@ -33,6 +33,24 @@ raganything = [
 anthropic = [
     "anthropic>=0.40",
 ]
+openai = [
+    "openai>=1.30",
+]
+gemini = [
+    "google-genai>=0.3",
+]
+bot = [
+    "aiogram>=3.4",
+    "httpx>=0.26",
+]
+service = [
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.27",
+    "sqlalchemy[asyncio]>=2.0",
+    "aiosqlite>=0.19",
+    "alembic>=1.13",
+    "httpx>=0.26",
+]
 
 [project.scripts]
 neuronium-agent = "neuronium_agent.cli.main:main"
@@ -40,14 +58,16 @@ neuronium-agent = "neuronium_agent.cli.main:main"
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["neuronium_agent*"]
+exclude = ["bot*", "service*"]
 
 [tool.setuptools.package-data]
 "neuronium_agent.packs.builtin" = ["*.yaml"]
 "neuronium_agent.packs.templates" = ["*.md"]
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+testpaths = ["tests", "service/tests", "bot/tests"]
 python_files = ["test_*.py"]
+asyncio_mode = "auto"
 markers = [
     "unit: unit tests",
     "integration: integration tests",

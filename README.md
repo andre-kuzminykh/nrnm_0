@@ -187,6 +187,28 @@ Per-agent routing in pack DSL: `model: anthropic:claude-opus-4-7` / `openai:gpt-
 
 **Credential-less development.** Each real provider accepts `mock_mode=True`. Pass `--provider anthropic --provider-mock` to develop multi-provider flows without API keys; trace records the simulated provider/model just as it would live calls.
 
+## Telegram Companion (bot/ + service/)
+
+Поверх агентной платформы лежит пара приложений по виджетной архитектуре:
+
+- `service/` — FastAPI бэкенд (model → repo → service → api), SQLite/aiosqlite в dev, Postgres в проде.
+- `bot/` — aiogram 3, ноды Trigger → Code → Answer, виджеты в `handler/v1/user/{tag}/{F###}/`, HTTP к бэкенду через `bot/service/api/`.
+
+PRD-первый рабочий процесс: `service/prd.json` и `bot/prd.json` — источники правды. Текущая фича F001 — команда `/start` (регистрация по Telegram ID + welcome). Полный обзор: `docs/specs/tg_bot_arch.md`.
+
+```bash
+# Backend
+pip install -e ".[service]"
+uvicorn service.main:app --reload --port 8000
+
+# Bot
+pip install -e ".[bot]"
+BOT_TOKEN=<token> BACKEND_URL=http://localhost:8000 python -m bot.app
+
+# Все тесты вместе
+pytest -q   # 168: neuronium 157 + backend 7 + bot 4
+```
+
 Per the official Claude API guidance the provider is configured with:
 
 - model `claude-opus-4-7`;
