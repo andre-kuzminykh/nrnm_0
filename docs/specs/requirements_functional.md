@@ -93,6 +93,20 @@
 - **NR-FR-GRAG-004** Evaluate artifact-reference preservation.
 - **NR-FR-GRAG-005** Emit retrieval diagnostics.
 
+## Hierarchical planning (HTN)
+
+- **NR-FR-PLAN-001** The system shall provide an HTN planner with `compound` / `primitive` tasks.
+- **NR-FR-PLAN-002** Compound tasks shall declare one or more methods; methods shall be ordered and may declare an `applies_when` predicate.
+- **NR-FR-PLAN-003** The planner shall pick the first applicable method.
+- **NR-FR-PLAN-004** The planner shall detect cycles and abort with a clear error.
+- **NR-FR-PLAN-005** The planner shall validate that referenced subtasks exist and refuse plans deeper than the configured maximum.
+- **NR-FR-PLAN-006** The pack DSL shall accept an optional `tasks:` block and `workflows[].root_task`.
+- **NR-FR-PLAN-007** The pack validator shall enforce per-task structural rules (primitive must have phase_id, compound must have methods, subtasks must resolve, phase_id must exist in workflow phases).
+- **NR-FR-PLAN-008** The compiler shall record `task_path` and `task_id` on every IR node it emits.
+- **NR-FR-PLAN-009** The runtime shall emit `plan.decomposed`, `subplan.entered`, `subplan.completed`, `subplan.failed`.
+- **NR-FR-PLAN-010** The runtime shall replan the smallest sufficient subplan on quality-gate failure.
+- **NR-FR-PLAN-011** Packs without HTN tasks shall use an implicit depth-1 plan derived from `workflow.phases`.
+
 ## RAG-Anything integration
 
 - **NR-FR-GRAG-010** Provide a pluggable `MemoryBackend` protocol with `retrieve`, `ingest`, `write_back`, `diagnostics`.

@@ -188,6 +188,25 @@ class ObjectiveRunner:
 
         # Select & compile IR
         program = self._select_program(compiled, objective)
+        # Emit hierarchical plan diagnostics when present.
+        plan = None
+        for obj_id, candidate in compiled.plan_templates.items():
+            if candidate.root.task_id == program.metadata.get("workflow_id") or obj_id == program.metadata.get("workflow_id"):
+                plan = candidate
+                break
+        if plan is None and compiled.plan_templates:
+            plan = next(iter(compiled.plan_templates.values()))
+        if plan is not None:
+            events.emit(
+                "plan.decomposed",
+                {
+                    "root": plan.root.task_id,
+                    "depth": plan.depth(),
+                    "leaves": [leaf.task_id for leaf in plan.leaves],
+                    "method_choices": dict(plan.method_choices),
+                    "htn": bool(compiled.htn_tasks),
+                },
+            )
         events.emit(
             "ir.built",
             {"program_id": program.id, "nodes": len(program.nodes), "edges": len(program.edges)},

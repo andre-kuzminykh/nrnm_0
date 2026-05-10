@@ -156,6 +156,7 @@ agents:
 workflows:
   - id: fix_bug_workflow
     objective_match: fix_bug
+    root_task: fix_bug_root
     phases:
       - id: plan
         agent: code_planner
@@ -183,6 +184,51 @@ workflows:
       - id: review
         agent: code_reviewer
         outputs: [verdict, reasons]
+
+tasks:
+  - id: fix_bug_root
+    kind: compound
+    description: Top-level fix-bug task.
+    methods:
+      - id: standard
+        subtasks: [understand_bug, edit_and_verify, review_outcome]
+
+  - id: understand_bug
+    kind: compound
+    description: Build a plan and identify the root cause.
+    methods:
+      - id: plan_then_inspect
+        subtasks: [task_plan, task_research]
+
+  - id: edit_and_verify
+    kind: compound
+    description: Propose a patch and run the tests.
+    methods:
+      - id: edit_then_test
+        subtasks: [task_edit, task_test]
+
+  - id: review_outcome
+    kind: compound
+    description: Review the changes and approve.
+    methods:
+      - id: single_review
+        subtasks: [task_review]
+
+  - id: task_plan
+    kind: primitive
+    phase_id: plan
+  - id: task_research
+    kind: primitive
+    phase_id: research
+  - id: task_edit
+    kind: primitive
+    phase_id: edit
+  - id: task_test
+    kind: primitive
+    phase_id: test
+  - id: task_review
+    kind: primitive
+    phase_id: review
 
 quality_gates:
   - id: tests_must_pass

@@ -75,12 +75,47 @@ def validate_pack(pack: WorkflowPack) -> None:
                     f"agent '{agent.id}' invalid permission mode '{mode}' for '{tool}'"
                 )
 
+    task_ids = {t.id for t in pack.tasks}
+    for task in pack.tasks:
+        if task.kind == "primitive":
+            if not task.phase_id:
+                errors.append(
+                    f"primitive HTN task '{task.id}' must declare phase_id"
+                )
+            if task.methods:
+                errors.append(
+                    f"primitive HTN task '{task.id}' must not declare methods"
+                )
+        else:
+            if not task.methods:
+                errors.append(
+                    f"compound HTN task '{task.id}' must declare at least one method"
+                )
+            for method in task.methods:
+                for sub in method.subtasks:
+                    if sub not in task_ids:
+                        errors.append(
+                            f"HTN method '{task.id}.{method.id}' references unknown task '{sub}'"
+                        )
+
     for workflow in pack.workflows:
         if workflow.objective_match not in objective_ids:
             errors.append(
                 f"workflow '{workflow.id}' references unknown objective "
                 f"'{workflow.objective_match}'"
             )
+        phase_ids = {p.id for p in workflow.phases}
+        if workflow.root_task is not None:
+            if workflow.root_task not in task_ids:
+                errors.append(
+                    f"workflow '{workflow.id}' root_task '{workflow.root_task}' is not declared in tasks"
+                )
+            for task in pack.tasks:
+                if task.kind == "primitive" and task.phase_id and task.phase_id not in phase_ids:
+                    errors.append(
+                        f"HTN primitive task '{task.id}' references phase '{task.phase_id}' "
+                        f"not in workflow '{workflow.id}'"
+                    )
         for phase in workflow.phases:
             if phase.agent not in agent_ids:
                 errors.append(

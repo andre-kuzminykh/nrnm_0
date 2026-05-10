@@ -137,27 +137,58 @@ def compile_program(program: Program) -> CompiledGraph:
         iters = 0
         replan_count = 0
         max_replans = 3
+        # Track entered subplans (`task_path` prefixes) so we can emit
+        # subplan.entered/subplan.completed events as execution crosses
+        # hierarchy levels.
+        active_path: List[str] = []
         while current and iters < max_iters:
             node = program.node_by_id(current)
             if node is None:
                 break
             visited.append(node.id)
+            new_path = list(getattr(node, "task_path", []) or [])
+            _emit_path_transitions(active_path, new_path, runtime)
+            active_path = new_path
             result = _execute_node(node, state, runtime)
             state.update(result)
             if isinstance(node, TerminalNode):
+                _close_remaining_subplans(active_path, runtime)
+                active_path = []
                 break
             next_id = _next_node(program, current, state)
             if isinstance(node, CriticNode):
                 verdict = state.get("verdict")
                 if verdict == "FAIL" and replan_count < max_replans:
                     replan_count += 1
+                    # Hierarchical replan scope selection:
+                    # 1. If the critic sits inside a sub-subplan (depth ≥ 3),
+                    #    target the previous top-level sibling subplan — this
+                    #    is typically where the artifact under check was
+                    #    produced (e.g. review fails → re-run edit_and_verify).
+                    # 2. Otherwise replan the immediate compound parent.
+                    # 3. Fall back to the program root.
+                    failed_path = list(getattr(node, "task_path", []) or [])
+                    replan_scope = _pick_replan_scope(program, failed_path)
+                    runtime.events.emit(
+                        "subplan.failed",
+                        {
+                            "subplan": replan_scope,
+                            "from_node": node.id,
+                            "task_path": failed_path,
+                            "checks": list(state.get("critic_failures", []) or []),
+                        },
+                    )
                     runtime.events.emit(
                         "replan.completed",
-                        {"from_node": node.id, "count": replan_count},
+                        {
+                            "from_node": node.id,
+                            "count": replan_count,
+                            "subplan": replan_scope,
+                            "scope": "subplan" if len(failed_path) >= 2 else "program",
+                        },
                     )
-                    # Reroute to start unless the IR provides an explicit FAIL
-                    # edge (i.e. an outgoing edge whose condition references
-                    # `verdict == 'FAIL'`).
+                    # Reroute to start of the subplan: first node whose
+                    # task_path contains the replan scope id.
                     fail_edge = next(
                         (
                             e
@@ -166,11 +197,16 @@ def compile_program(program: Program) -> CompiledGraph:
                         ),
                         None,
                     )
-                    next_id = fail_edge.to_id if fail_edge else _find_start(program)
-                    # Clear the verdict so the next critic pass starts fresh.
+                    if fail_edge:
+                        next_id = fail_edge.to_id
+                    else:
+                        next_id = _start_of_subplan(program, replan_scope) or _find_start(program)
+                    # Re-emit subplan.entered for the replanned scope on the next iteration.
+                    active_path = []
                     state.pop("verdict", None)
             current = next_id
             iters += 1
+        _close_remaining_subplans(active_path, runtime)
         return {
             "final_state": state,
             "visited": visited,
@@ -178,3 +214,58 @@ def compile_program(program: Program) -> CompiledGraph:
         }
 
     return CompiledGraph(program=program, runner=runner)
+
+
+def _emit_path_transitions(
+    prev: List[str], new: List[str], runtime: Any
+) -> None:
+    # Find longest common prefix.
+    common = 0
+    while (
+        common < len(prev)
+        and common < len(new)
+        and prev[common] == new[common]
+    ):
+        common += 1
+    for closed in reversed(prev[common:]):
+        runtime.events.emit("subplan.completed", {"subplan": closed})
+    for opened in new[common:]:
+        runtime.events.emit("subplan.entered", {"subplan": opened})
+
+
+def _close_remaining_subplans(active_path: List[str], runtime: Any) -> None:
+    for closed in reversed(active_path):
+        runtime.events.emit("subplan.completed", {"subplan": closed})
+
+
+def _start_of_subplan(program: Program, subplan_id: str) -> Optional[str]:
+    for node in program.nodes:
+        task_path = getattr(node, "task_path", None) or []
+        if subplan_id in task_path:
+            return node.id
+    return None
+
+
+def _top_level_subplans(program: Program) -> List[str]:
+    seen: List[str] = []
+    for node in program.nodes:
+        path = getattr(node, "task_path", None) or []
+        if len(path) >= 2 and path[1] not in seen:
+            seen.append(path[1])
+    return seen
+
+
+def _pick_replan_scope(program: Program, failed_path: List[str]) -> str:
+    if not failed_path:
+        return program.id
+    if len(failed_path) >= 3:
+        top_level = _top_level_subplans(program)
+        failing_top = failed_path[1]
+        if failing_top in top_level:
+            idx = top_level.index(failing_top)
+            if idx > 0:
+                return top_level[idx - 1]
+        return failed_path[0]
+    if len(failed_path) >= 2:
+        return failed_path[-2]
+    return failed_path[-1]

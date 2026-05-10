@@ -81,11 +81,28 @@ class WorkflowPhase(BaseModel):
     kind: Literal["model", "tool", "operator", "critic"] = "model"
 
 
+class PackHTNMethod(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    id: str
+    applies_when: str = "true"
+    subtasks: List[str] = Field(default_factory=list)
+
+
+class PackHTNTask(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    id: str
+    kind: Literal["compound", "primitive"]
+    description: str = ""
+    phase_id: Optional[str] = None
+    methods: List[PackHTNMethod] = Field(default_factory=list)
+
+
 class PackWorkflow(BaseModel):
     model_config = ConfigDict(extra="forbid")
     id: str
     objective_match: str
     phases: List[WorkflowPhase] = Field(default_factory=list)
+    root_task: Optional[str] = None  # HTN root task id; defaults to implicit plan from phases
 
 
 class QualityGate(BaseModel):
@@ -117,6 +134,7 @@ class WorkflowPack(BaseModel):
     agents: List[PackAgent] = Field(default_factory=list)
     tools: List[PackTool] = Field(default_factory=list)
     workflows: List[PackWorkflow] = Field(default_factory=list)
+    tasks: List[PackHTNTask] = Field(default_factory=list)
     quality_gates: List[QualityGate] = Field(default_factory=list)
     outputs: List[OutputTemplate] = Field(default_factory=list)
     tests: List[PackTest] = Field(default_factory=list)
@@ -133,6 +151,9 @@ class WorkflowPack(BaseModel):
         tool_refs = [t.ref for t in self.tools]
         if len(tool_refs) != len(set(tool_refs)):
             raise ValueError("duplicate tool refs in pack")
+        task_ids = [t.id for t in self.tasks]
+        if len(task_ids) != len(set(task_ids)):
+            raise ValueError("duplicate HTN task ids in pack")
         return self
 
     def get_workflow_for_objective(self, objective_id: str) -> Optional[PackWorkflow]:

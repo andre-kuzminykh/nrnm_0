@@ -39,7 +39,9 @@ Workflow Pack Validator
        ▼
 Workflow Pack Compiler ──► Agent Definitions
                        └► Tool Policies
-                       └► Workflow Templates
+                       └► HTN Tasks + Methods
+                       └► Hierarchical Plan Templates
+                       └► Workflow IR Templates (nodes carry task_path)
                        └► Quality Gates
                        └► Output Templates
                        │
@@ -50,10 +52,17 @@ Workflow Pack Compiler ──► Agent Definitions
                 Objective Runner
                        │
                        ▼
+              HTN Planner (or implicit fallback)
+                       │
+                       ▼
               Workflow IR Builder
                        │
                        ▼
             LangGraph-compatible runtime
+                       │
+                       ├─ subplan.entered / subplan.completed
+                       ├─ subplan.failed
+                       └─ replan.completed (scope: subplan|program)
 ```
 
 ## Module map (Python)
@@ -62,6 +71,11 @@ Workflow Pack Compiler ──► Agent Definitions
 neuronium_agent/
   __init__.py
   api.py                       # public Python facade
+  planning/                    # HTN models + planner
+    __init__.py
+    models.py                  # HTNTask, HTNMethod, PlanNode, HierarchicalPlan
+    planner.py                 # HTNPlanner + implicit fallback
+    errors.py
   ir/                          # Workflow IR
     __init__.py
     models.py                  # IR nodes/edges/program

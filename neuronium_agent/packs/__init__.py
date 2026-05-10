@@ -3,6 +3,8 @@
 from neuronium_agent.packs.errors import PackError, PackValidationError
 from neuronium_agent.packs.models import (
     Objective,
+    PackHTNMethod,
+    PackHTNTask,
     PackMetadata,
     PackTool,
     PackWorkflow,

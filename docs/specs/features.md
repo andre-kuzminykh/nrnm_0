@@ -27,8 +27,8 @@ Legend: **MVP** implemented in v0.1 (mock mode), **SPEC** specified only, **PLAN
 | NR-F-012 | Objective clarification | SPEC |
 | NR-F-013 | GraphRAG context retrieval | MVP (mock) |
 | NR-F-014 | Context budget manager | MVP |
-| NR-F-015 | Planning service | MVP |
-| NR-F-016 | Task decomposition | MVP |
+| NR-F-015 | Planning service (HTN-based) | MVP |
+| NR-F-016 | Hierarchical task decomposition | MVP |
 | NR-F-017 | Dynamic Workflow IR builder | MVP |
 | NR-F-018 | Dynamic Agent Factory | MVP |
 | NR-F-019 | Task-specific subagents | MVP |
@@ -106,6 +106,21 @@ Legend: **MVP** implemented in v0.1 (mock mode), **SPEC** specified only, **PLAN
 | NR-F-087 | Artifact-preserving summaries | SPEC |
 | NR-F-088 | Pluggable memory backend protocol (mock / raganything / custom) | MVP |
 | NR-F-089 | Document ingestion API (file + inline text) | MVP |
+
+## Hierarchical planning
+
+| ID | Name | Status |
+| --- | --- | --- |
+| NR-F-150 | HTN task / method models | MVP |
+| NR-F-151 | HTN planner with applies_when method selection | MVP |
+| NR-F-152 | Pack DSL `tasks` + `workflows[].root_task` | MVP |
+| NR-F-153 | Implicit plan fallback for packs without HTN tasks | MVP |
+| NR-F-154 | IR `task_path` / `task_id` metadata | MVP |
+| NR-F-155 | `plan.decomposed` event | MVP |
+| NR-F-156 | `subplan.entered` / `subplan.completed` events | MVP |
+| NR-F-157 | `subplan.failed` event | MVP |
+| NR-F-158 | Subplan-scoped replan (nearest-sibling heuristic) | MVP |
+| NR-F-159 | Cycle / depth / unknown-task validation | MVP |
 
 ## Operational discipline
 

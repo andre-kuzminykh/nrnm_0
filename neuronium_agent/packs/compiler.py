@@ -24,12 +24,18 @@ from neuronium_agent.ir.models import (
     ToolNode,
 )
 from neuronium_agent.packs.models import (
+    PackHTNTask,
     PackTool,
     QualityGate,
     WorkflowPack,
     WorkflowPhase,
 )
 from neuronium_agent.packs.validator import validate_pack
+from neuronium_agent.planning.models import HTNMethod, HTNTask, HierarchicalPlan, TaskKind
+from neuronium_agent.planning.planner import (
+    HTNPlanner,
+    build_implicit_plan_from_phases,
+)
 
 
 class ToolPolicyEntry(BaseModel):
@@ -48,6 +54,8 @@ class CompiledPack(BaseModel):
     tool_policy: List[ToolPolicyEntry]
     tool_descriptors: Dict[str, PackTool]
     ir_templates: Dict[str, Program]
+    plan_templates: Dict[str, HierarchicalPlan] = {}
+    htn_tasks: Dict[str, HTNTask] = {}
     quality_gates: List[QualityGate]
     tests: List[Dict[str, object]]
 
@@ -121,7 +129,35 @@ def _phase_kind(phase: WorkflowPhase, pack: WorkflowPack) -> str:
     return "model"
 
 
-def _build_ir_for_workflow(pack: WorkflowPack, workflow_id: str) -> Program:
+def _pack_task_to_htn(task: PackHTNTask) -> HTNTask:
+    return HTNTask(
+        id=task.id,
+        kind=TaskKind(task.kind),
+        description=task.description,
+        phase_id=task.phase_id,
+        methods=[
+            HTNMethod(id=m.id, applies_when=m.applies_when, subtasks=m.subtasks)
+            for m in task.methods
+        ],
+    )
+
+
+def _plan_for_workflow(pack: WorkflowPack, workflow_id: str) -> HierarchicalPlan:
+    workflow = next((w for w in pack.workflows if w.id == workflow_id), None)
+    if workflow is None:
+        raise KeyError(f"workflow {workflow_id} not found")
+    if workflow.root_task and pack.tasks:
+        htn_tasks = {t.id: _pack_task_to_htn(t) for t in pack.tasks}
+        planner = HTNPlanner(htn_tasks)
+        return planner.plan(workflow.root_task)
+    return build_implicit_plan_from_phases(
+        workflow.id, [p.id for p in workflow.phases]
+    )
+
+
+def _build_ir_for_workflow(
+    pack: WorkflowPack, workflow_id: str
+) -> tuple[Program, HierarchicalPlan]:
     workflow = next((w for w in pack.workflows if w.id == workflow_id), None)
     if workflow is None:
         raise KeyError(f"workflow {workflow_id} not found")
@@ -130,6 +166,8 @@ def _build_ir_for_workflow(pack: WorkflowPack, workflow_id: str) -> Program:
         (o for o in pack.objectives if o.id == workflow.objective_match), None
     )
     objective_text = objective.id if objective else workflow_id
+    plan = _plan_for_workflow(pack, workflow_id)
+    phase_index = {p.id: p for p in workflow.phases}
 
     agent_refs = [
         AgentRef(id=a.id, role=a.role, pack_agent_id=a.id) for a in pack.agents
@@ -138,10 +176,16 @@ def _build_ir_for_workflow(pack: WorkflowPack, workflow_id: str) -> Program:
     nodes = []
     edges = []
     prev_id: Optional[str] = None
-    gate_nodes_added = 0
     critic_in_workflow = False
 
-    for phase in workflow.phases:
+    for leaf in plan.leaves:
+        if leaf.phase_id is None:
+            continue
+        phase = phase_index.get(leaf.phase_id)
+        if phase is None:
+            # Plan referenced a phase that does not exist in this workflow.
+            continue
+        task_path = list(leaf.task_path)
         kind = _phase_kind(phase, pack)
         node_id = f"n_{phase.id}"
         if kind == "tool":
@@ -154,6 +198,8 @@ def _build_ir_for_workflow(pack: WorkflowPack, workflow_id: str) -> Program:
                     tool_ref=tool_ref,
                     args={},
                     outputs=phase.outputs,
+                    task_path=task_path,
+                    task_id=leaf.task_id,
                 )
             )
         elif kind == "critic":
@@ -169,6 +215,8 @@ def _build_ir_for_workflow(pack: WorkflowPack, workflow_id: str) -> Program:
                     agent_ref=phase.agent,
                     checks=checks,
                     outputs=phase.outputs or ["verdict"],
+                    task_path=task_path,
+                    task_id=leaf.task_id,
                 )
             )
         elif kind == "operator":
@@ -179,6 +227,8 @@ def _build_ir_for_workflow(pack: WorkflowPack, workflow_id: str) -> Program:
                     op="assign",
                     args={},
                     outputs=phase.outputs,
+                    task_path=task_path,
+                    task_id=leaf.task_id,
                 )
             )
         else:
@@ -191,6 +241,8 @@ def _build_ir_for_workflow(pack: WorkflowPack, workflow_id: str) -> Program:
                     prompt_ref=prompt_ref or "",
                     inputs=[],
                     outputs=phase.outputs,
+                    task_path=task_path,
+                    task_id=leaf.task_id,
                 )
             )
 
@@ -206,11 +258,12 @@ def _build_ir_for_workflow(pack: WorkflowPack, workflow_id: str) -> Program:
                     name=f"approve_{phase.id}",
                     purpose="approval",
                     message=f"Approve phase '{phase.id}'?",
+                    task_path=task_path,
+                    task_id=leaf.task_id,
                 )
             )
             edges.append(Edge(from_id=prev_id, to_id=gate_id))
             prev_id = gate_id
-            gate_nodes_added += 1
 
     # Add critic node if pack has quality gates but no critic agent in workflow.
     if pack.quality_gates and not critic_in_workflow:
@@ -232,6 +285,8 @@ def _build_ir_for_workflow(pack: WorkflowPack, workflow_id: str) -> Program:
                     for g in pack.quality_gates
                 ],
                 outputs=["verdict"],
+                task_path=[plan.root.task_id],
+                task_id=f"{plan.root.task_id}.critic",
             )
         )
         if prev_id is not None:
@@ -245,6 +300,8 @@ def _build_ir_for_workflow(pack: WorkflowPack, workflow_id: str) -> Program:
             id=final_id,
             name="final_outcome",
             outcome_template=template,
+            task_path=[plan.root.task_id],
+            task_id=f"{plan.root.task_id}.terminal",
         )
     )
     if prev_id is not None:
@@ -253,7 +310,7 @@ def _build_ir_for_workflow(pack: WorkflowPack, workflow_id: str) -> Program:
     inputs = {"objective": "string"}
     outputs = {"final_report": "markdown"}
 
-    return Program(
+    program = Program(
         id=f"{pack.id}.{workflow.id}",
         version="0.1",
         pack_id=pack.id,
@@ -263,8 +320,13 @@ def _build_ir_for_workflow(pack: WorkflowPack, workflow_id: str) -> Program:
         agents=agent_refs,
         nodes=nodes,
         edges=edges,
-        metadata={"workflow_id": workflow.id},
+        metadata={
+            "workflow_id": workflow.id,
+            "plan_depth": plan.depth(),
+            "plan_method_choices": dict(plan.method_choices),
+        },
     )
+    return program, plan
 
 
 def _find_agent_prompt(pack: WorkflowPack, agent_id: str) -> Optional[str]:
@@ -280,10 +342,12 @@ def compile_pack(pack: WorkflowPack) -> CompiledPack:
     tool_policy = _compile_tool_policy(pack)
     tool_descriptors = {t.ref: t for t in pack.tools}
     ir_templates: Dict[str, Program] = {}
+    plan_templates: Dict[str, HierarchicalPlan] = {}
     for workflow in pack.workflows:
-        ir_templates[workflow.objective_match] = _build_ir_for_workflow(
-            pack, workflow.id
-        )
+        program, plan = _build_ir_for_workflow(pack, workflow.id)
+        ir_templates[workflow.objective_match] = program
+        plan_templates[workflow.objective_match] = plan
+    htn_tasks = {t.id: _pack_task_to_htn(t) for t in pack.tasks}
     tests = [t.model_dump() for t in pack.tests]
     return CompiledPack(
         pack=pack,
@@ -291,6 +355,8 @@ def compile_pack(pack: WorkflowPack) -> CompiledPack:
         tool_policy=tool_policy,
         tool_descriptors=tool_descriptors,
         ir_templates=ir_templates,
+        plan_templates=plan_templates,
+        htn_tasks=htn_tasks,
         quality_gates=pack.quality_gates,
         tests=tests,
     )

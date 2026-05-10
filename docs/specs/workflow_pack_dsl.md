@@ -91,10 +91,16 @@ tools:
 
 ## Workflow
 
+A workflow may optionally reference an HTN root task via `root_task`. When set,
+the runtime decomposes that compound task using the pack's `tasks` block (see
+`hierarchical_planning.md`). When unset, an implicit depth-1 plan is derived
+from `phases`.
+
 ```yaml
 workflows:
   - id: fix_bug_workflow
     objective_match: fix_bug
+    root_task: fix_bug_root              # optional — enables HTN planning
     phases:
       - id: understand
         agent: code_planner
@@ -116,6 +122,37 @@ workflows:
 ```
 
 The compiler produces one IR node per phase by default. Authors may extend with explicit IR nodes when needed.
+
+## HTN tasks (optional)
+
+```yaml
+tasks:
+  - id: fix_bug_root
+    kind: compound
+    description: Top-level fix-bug task.
+    methods:
+      - id: standard
+        applies_when: "true"
+        subtasks: [understand_bug, edit_and_verify, review_outcome]
+  - id: understand_bug
+    kind: compound
+    methods:
+      - id: plan_then_inspect
+        subtasks: [task_plan, task_research]
+  - id: task_plan
+    kind: primitive
+    phase_id: plan
+  # ...
+```
+
+Rules:
+
+- `kind` is `compound` or `primitive`.
+- `primitive` tasks declare `phase_id` (must exist in the workflow's `phases`) and no `methods`.
+- `compound` tasks declare one or more `methods`. The first method whose `applies_when` predicate is truthy against the current state is selected.
+- All `subtasks` references must resolve to declared tasks.
+- Cycles and depth > 32 are rejected by the planner.
+- Omit the section entirely to use an implicit depth-1 plan.
 
 ## Quality gates
 

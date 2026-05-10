@@ -27,6 +27,8 @@ class _NodeBase(BaseModel):
     id: str
     name: str
     description: Optional[str] = None
+    task_path: List[str] = Field(default_factory=list)
+    task_id: Optional[str] = None
 
 
 class ModelNode(_NodeBase):

@@ -147,6 +147,33 @@ Full specifications live in `docs/specs/`:
 | `test_matrix.md` | Test ↔ requirement matrix |
 | `delivery_plan.md` | v0.1 and v0.2+ roadmap |
 
+## Hierarchical planning (HTN)
+
+Workflow packs can describe work as a tree of tasks instead of a flat phase list. The runtime decomposes a `compound` task via declared `methods` into `primitive` leaves, each mapped to a workflow phase. Every IR node carries a `task_path`, the runtime emits `plan.decomposed`, `subplan.entered/completed/failed`, and quality-gate failures replan the smallest sufficient subplan.
+
+Coding pack example (excerpt):
+
+```yaml
+workflows:
+  - id: fix_bug_workflow
+    objective_match: fix_bug
+    root_task: fix_bug_root
+
+tasks:
+  - id: fix_bug_root
+    kind: compound
+    methods:
+      - id: standard
+        subtasks: [understand_bug, edit_and_verify, review_outcome]
+  - id: understand_bug
+    kind: compound
+    methods:
+      - { id: plan_then_inspect, subtasks: [task_plan, task_research] }
+  # ...
+```
+
+Packs without `tasks:` keep working — a depth-1 implicit plan is generated automatically. Full spec: `docs/specs/hierarchical_planning.md`.
+
 ## Memory backends (RAG)
 
 The memory layer is pluggable. Two backends ship:

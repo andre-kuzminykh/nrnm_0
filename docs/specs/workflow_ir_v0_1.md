@@ -65,7 +65,10 @@ class TerminalNode(Node):
     outcome_template: Optional[str]
 ```
 
-Every node has `id: str`, `name: str`, `description: Optional[str]`.
+Every node has `id: str`, `name: str`, `description: Optional[str]`, plus hierarchical-planning metadata:
+
+- `task_path: list[str]` — ordered list of compound ancestors that own this node (HTN context). Empty for nodes not produced by a planned task.
+- `task_id: Optional[str]` — the id of the planning task that produced the node.
 
 ## Edges
 

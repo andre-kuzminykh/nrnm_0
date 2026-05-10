@@ -114,6 +114,58 @@ Feature: Secret redaction
     Then the API key should be redacted
 ```
 
+## Hierarchical planning
+
+```gherkin
+@NR-BDD-PLAN-001 @NR-FR-PLAN-001 @NR-FR-PLAN-002 @NR-UT-PLAN-001
+Feature: HTN decomposition
+  Scenario: Compound task expands into primitives
+    Given a compound task with one method referencing two primitive subtasks
+    When the planner is asked to plan that task
+    Then the resulting plan should have depth >= 2
+    And the leaves should match the subtask ids
+```
+
+```gherkin
+@NR-BDD-PLAN-002 @NR-FR-PLAN-003 @NR-UT-PLAN-003
+Feature: Method selection
+  Scenario: First applicable method wins
+    Given a compound task with three methods whose applies_when predicates differ
+    When the planner runs with a state that only satisfies the second predicate
+    Then the second method should be selected
+```
+
+```gherkin
+@NR-BDD-PLAN-003 @NR-FR-PLAN-009 @NR-IT-PLAN-001 @NR-IT-PLAN-002
+Feature: Subplan events
+  Scenario: Subplan.entered / subplan.completed pair on every compound ancestor
+    Given the coding pack with HTN tasks declared
+    When an objective runs
+    Then plan.decomposed should be emitted with depth >= 3
+    And every subplan.entered should be balanced by a subplan.completed
+```
+
+```gherkin
+@NR-BDD-PLAN-004 @NR-FR-PLAN-010 @NR-IT-PLAN-003
+Feature: Subplan-scoped replan
+  Scenario: Critic FAIL narrows the replan scope to the sibling subplan
+    Given a coding run whose first test_runner attempt fails
+    When the critic emits FAIL
+    Then a subplan.failed event should be emitted
+    And the next replan.completed event should target the previous top-level sibling subplan
+    And the run should ultimately succeed
+```
+
+```gherkin
+@NR-BDD-PLAN-005 @NR-FR-PLAN-011 @NR-IT-PLAN-005
+Feature: Implicit plan fallback
+  Scenario: Pack without HTN tasks still runs
+    Given a workflow pack without `tasks:`
+    When an objective runs
+    Then plan.decomposed should be emitted with htn=False
+    And the implicit method choice should be "implicit_sequence"
+```
+
 ## Memory / RAG-Anything
 
 ```gherkin

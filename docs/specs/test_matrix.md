@@ -54,6 +54,21 @@ Every requirement maps to at least one test. Tests run in mock mode only.
 | NR-GRAG-EVAL-002 | entity linking fixture |
 | NR-GRAG-EVAL-003 | artifact preservation fixture |
 
+## Hierarchical planning
+
+| ID | Subject | Requirement |
+| --- | --- | --- |
+| NR-UT-PLAN-001 | HTN planner expands compound into primitives | NR-FR-PLAN-001 |
+| NR-UT-PLAN-002 | Recursive decomposition keeps order and depth | NR-FR-PLAN-001 |
+| NR-UT-PLAN-003 | First applicable method wins | NR-FR-PLAN-003 |
+| NR-UT-PLAN-004 | Cycle detection | NR-FR-PLAN-004 |
+| NR-UT-PLAN-005 | Implicit plan from phases | NR-FR-PLAN-011 |
+| NR-IT-PLAN-001 | plan.decomposed emitted with HTN payload | NR-FR-PLAN-009 |
+| NR-IT-PLAN-002 | subplan.entered/completed balanced | NR-FR-PLAN-009 |
+| NR-IT-PLAN-003 | Hierarchical replan picks sibling subplan | NR-FR-PLAN-010 |
+| NR-IT-PLAN-004 | IR nodes carry task_path metadata | NR-FR-PLAN-008 |
+| NR-IT-PLAN-005 | Implicit plan fallback | NR-FR-PLAN-011 |
+
 ## Memory / RAG-Anything
 
 | ID | Subject | Requirement |
