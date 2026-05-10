@@ -176,10 +176,14 @@ Packs without `tasks:` keep working — a depth-1 implicit plan is generated aut
 
 ## Model providers
 
-Two providers ship:
+Four providers ship:
 
 - `mock` — deterministic, used in `--mock` runs and CI (default).
-- `anthropic` — real Claude calls (Opus 4.7 by default). Optional dep: `pip install "neuronium-agent[anthropic]"`. Requires `ANTHROPIC_API_KEY`.
+- `anthropic` — real Claude calls (Opus 4.7 by default). `pip install "neuronium-agent[anthropic]"`, env `ANTHROPIC_API_KEY`.
+- `openai` — gpt-4o family (function calling, vision, JSON-schema). `pip install "neuronium-agent[openai]"`, env `OPENAI_API_KEY`.
+- `gemini` — gemini-2.5-pro (1M context, multimodal). `pip install "neuronium-agent[gemini]"`, env `GEMINI_API_KEY`.
+
+Per-agent routing in pack DSL: `model: anthropic:claude-opus-4-7` / `openai:gpt-4o` / `gemini:2.5-pro`. Spec: `docs/specs/model_routing.md`.
 
 Per the official Claude API guidance the provider is configured with:
 
@@ -225,13 +229,35 @@ result = run_objective(
 
 When `raganything` is not installed, the backend remains importable but reports `ready=False`; the run continues to work using the mock backend. `neuronium-agent doctor` reports the install status.
 
+## Real tools, MCP, and REPL
+
+By default Neuronium runs in mock mode. To execute real commands and edit files:
+
+```bash
+neuronium-agent code "fix the failing test" --repl --real-tools --cwd .
+neuronium-agent objective run "Unzip every archive under ~/Desktop/hmnd into a new folder 123" \
+    --pack coding --provider anthropic \
+    --real-tools --cwd ~/Desktop/hmnd --shell-timeout-s 60
+```
+
+Real tools are sandboxed: shell commands pass a denylist (`rm -rf /`, `mkfs`, fork bombs, ...), every fs op resolves under `--cwd`/`--allow-dir`, and edits show a unified diff before approval. Spec: `docs/specs/real_tools.md`.
+
+Real MCP servers (stdio / HTTP) are configured via `.neuronium/mcp.yaml`:
+
+```bash
+neuronium-agent mcp list
+neuronium-agent mcp test bash
+```
+
+Spec: `docs/specs/mcp_real_client.md`.
+
+Inspect prior runs with `neuronium-agent runs list/show/replay`.
+
 ## Known limitations (v0.1)
 
 - The LangGraph backend is an in-process executor with LangGraph-compatible semantics. v0.2 will swap in real LangGraph behind the same `CompiledGraph` interface.
-- MCP integration is mocked; the lifecycle/spec is documented and ready for a real adapter.
 - The mock GraphRAG uses golden fixtures. Real retrieval is available through the RAG-Anything backend when its optional dependencies are installed; CI exercises the adapter via injected fakes.
 - HTTP server + SSE + OpenAPI are specified, not implemented.
-- Replay is specified but not yet a `cli replay` command.
 
 ## Repository layout
 

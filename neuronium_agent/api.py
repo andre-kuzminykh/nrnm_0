@@ -8,6 +8,7 @@ from neuronium_agent.memory.backend import MemoryBackend, MemoryConfig
 from neuronium_agent.packs.compiler import CompiledPack
 from neuronium_agent.packs.registry import PackRegistry
 from neuronium_agent.runtime.objective_runner import ObjectiveRunner, RunResult
+from neuronium_agent.tools.real import RealToolsConfig
 
 
 def list_packs() -> List[Dict[str, str]]:
@@ -45,6 +46,12 @@ def run_objective(
     memory_config: Optional[MemoryConfig] = None,
     provider: str = "mock",
     provider_options: Optional[Dict[str, Any]] = None,
+    real_tools: bool = False,
+    real_tools_cwd: Optional[str] = None,
+    real_tools_allowed_roots: Optional[List[str]] = None,
+    real_tools_timeout_s: int = 30,
+    real_tools_allow_destructive: bool = False,
+    real_tools_config: Optional[RealToolsConfig] = None,
 ) -> RunResult:
     """Run an objective with the chosen pack.
 
@@ -57,6 +64,15 @@ def run_objective(
     """
     if auto_approve is None:
         auto_approve = mock
+    rt_config = real_tools_config
+    if rt_config is None and real_tools:
+        cwd = real_tools_cwd or "."
+        rt_config = RealToolsConfig(
+            cwd=cwd,
+            allowed_roots=real_tools_allowed_roots or [cwd],
+            timeout_s=real_tools_timeout_s,
+            allow_destructive=real_tools_allow_destructive,
+        )
     runner = ObjectiveRunner(
         trace_dir=trace_dir,
         auto_approve=auto_approve,
@@ -65,5 +81,6 @@ def run_objective(
         memory_config=memory_config,
         provider=provider,
         provider_options=provider_options or {},
+        real_tools_config=rt_config,
     )
     return runner.run(objective, pack_id=pack, inputs=inputs)

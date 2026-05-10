@@ -33,6 +33,26 @@ from neuronium_agent.runtime.events import EventBus
 from neuronium_agent.tools.governance import PermissionDecision, PolicyEngine
 from neuronium_agent.tools.registry import ToolRegistry
 from neuronium_agent.tools.mock_mcp import MockMCP
+from neuronium_agent.tools.real import RealToolsConfig, register_real_tools
+from neuronium_agent.runtime.diff_preview import (
+    render_edit_diff,
+    render_patch_diff,
+    render_write_preview,
+)
+
+
+def _diff_preview_for(tool_ref: str, args: Dict[str, Any]) -> Optional[str]:
+    """Build a human-readable preview for risky tool calls."""
+    if tool_ref == "fs.edit":
+        path = args.get("path") or "<unknown>"
+        return render_edit_diff(path, args.get("old", ""), args.get("new", ""))
+    if tool_ref == "fs.write":
+        return render_write_preview(args.get("path", "<unknown>"), args.get("content", ""))
+    if tool_ref == "patch.apply":
+        return render_patch_diff(args.get("patch", ""))
+    if tool_ref == "shell.run":
+        return f"$ {args.get('command', '')}"
+    return None
 
 
 class HumanGateController:
@@ -43,13 +63,29 @@ class HumanGateController:
         self.pending: List[Dict[str, Any]] = []
         self.last_decision: Optional[bool] = None
 
-    def request(self, *, tool_ref: Optional[str], agent_id: Optional[str], message: str) -> bool:
-        request = {"tool_ref": tool_ref, "agent_id": agent_id, "message": message}
+    def request(
+        self,
+        *,
+        tool_ref: Optional[str],
+        agent_id: Optional[str],
+        message: str,
+        diff_preview: Optional[str] = None,
+    ) -> bool:
+        request = {
+            "tool_ref": tool_ref,
+            "agent_id": agent_id,
+            "message": message,
+            "diff_preview": diff_preview,
+        }
         self.pending.append(request)
         if self.auto_approve:
             self.last_decision = True
             return True
         # Interactive prompt; in tests this branch is patched.
+        if diff_preview:
+            print("\n--- proposed change ---")
+            print(diff_preview)
+            print("--- end of preview ---\n")
         try:
             answer = input(f"[approval] {message} [y/N] ").strip().lower()
         except EOFError:
@@ -150,6 +186,7 @@ class Runtime(BaseModel):
                 tool_ref=node.tool_ref,
                 agent_id=node.agent_ref,
                 message=f"Approve use of tool '{node.tool_ref}' by agent '{node.agent_ref}'?",
+                diff_preview=_diff_preview_for(node.tool_ref, args),
             )
             if not approved:
                 self.events.emit(
@@ -337,6 +374,7 @@ class Runtime(BaseModel):
                 self.events.emit("tool.denied", {"tool_ref": ref, "agent_id": agent_id})
                 raise PermissionError(f"tool '{ref}' denied by policy")
             if decision == PermissionDecision.REQUIRE_APPROVAL:
+                preview = _diff_preview_for(ref, tool_input)
                 approved = self.gate.request(
                     tool_ref=ref,
                     agent_id=agent_id,
@@ -344,6 +382,7 @@ class Runtime(BaseModel):
                         f"Approve use of tool '{ref}' by agent '{agent_id}' "
                         "(requested by the model)?"
                     ),
+                    diff_preview=preview,
                 )
                 if not approved:
                     self.events.emit(
@@ -449,6 +488,7 @@ def build_default_runtime(
     provider: str = "mock",
     provider_options: Optional[Dict[str, Any]] = None,
     models: Optional[ModelRegistry] = None,
+    real_tools_config: Optional[RealToolsConfig] = None,
 ) -> Runtime:
     if models is None:
         models = default_registry(
@@ -457,7 +497,13 @@ def build_default_runtime(
             provider_options=provider_options or {},
         )
     tool_registry = ToolRegistry()
-    MockMCP().register_default(tool_registry)
+    if real_tools_config is not None:
+        # Real tools take precedence; mock tools fill in the gaps for refs the
+        # real implementation does not yet cover (marketing/HR mock tools).
+        MockMCP().register_default(tool_registry)
+        register_real_tools(tool_registry, real_tools_config)
+    else:
+        MockMCP().register_default(tool_registry)
     if memory is None:
         try:
             memory = build_backend(memory_config or MemoryConfig())

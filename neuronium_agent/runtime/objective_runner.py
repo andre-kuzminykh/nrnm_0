@@ -20,6 +20,7 @@ from neuronium_agent.runtime.backend import Runtime, build_default_runtime
 from neuronium_agent.runtime.events import EventBus
 from neuronium_agent.runtime.state import Run, RunStatus
 from neuronium_agent.tools.governance import PermissionDecision, PolicyEngine, ToolPolicyEntry
+from neuronium_agent.tools.real import RealToolsConfig
 from neuronium_agent.trace.recorder import TraceRecorder
 
 
@@ -57,6 +58,7 @@ class ObjectiveRunner:
         memory_config: Optional[MemoryConfig] = None,
         provider: str = "mock",
         provider_options: Optional[Dict[str, Any]] = None,
+        real_tools_config: Optional[RealToolsConfig] = None,
     ) -> None:
         self.registry = registry or PackRegistry()
         self.trace_dir = trace_dir
@@ -66,6 +68,7 @@ class ObjectiveRunner:
         self.memory_config = memory_config or MemoryConfig()
         self.provider = provider
         self.provider_options = provider_options or {}
+        self.real_tools_config = real_tools_config
 
     def _select_pack(self, objective: str, pack_id: Optional[str]) -> CompiledPack:
         if pack_id:
@@ -190,7 +193,17 @@ class ObjectiveRunner:
             memory_config=self.memory_config,
             provider=self.provider,
             provider_options=self.provider_options,
+            real_tools_config=self.real_tools_config,
         )
+        if self.real_tools_config is not None:
+            events.emit(
+                "tools.real_enabled",
+                {
+                    "cwd": self.real_tools_config.cwd,
+                    "allowed_roots": self.real_tools_config.allowed_roots,
+                    "timeout_s": self.real_tools_config.timeout_s,
+                },
+            )
         events.emit(
             "provider.selected",
             {
