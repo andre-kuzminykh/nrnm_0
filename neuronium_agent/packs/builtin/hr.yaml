@@ -1,0 +1,143 @@
+pack:
+  id: hr
+  name: HR Workflow Pack
+  version: "0.1.0"
+  schema_version: "0.1"
+  compatible_neuronium: ">=0.1.0"
+  domain: human_resources
+  description: Helps recruiters screen candidates and plan interviews.
+
+objectives:
+  - id: screen_candidates
+    user_phrases:
+      - "screen candidates"
+      - "evaluate candidates"
+      - "shortlist candidates"
+    expected_outcomes:
+      - candidates ranked
+      - rationale provided
+      - compliance verified
+
+  - id: plan_interview
+    user_phrases:
+      - "create interview plan"
+      - "interview plan"
+      - "design interview"
+    expected_outcomes:
+      - interview structure produced
+      - questions provided
+
+tools:
+  - ref: ats.search
+    kind: mcp
+    risk: low
+  - ref: ats.read_candidate
+    kind: mcp
+    risk: low
+  - ref: calendar.create
+    kind: mcp
+    risk: medium
+    default_permission: require_approval
+  - ref: email.draft
+    kind: mcp
+    risk: medium
+    default_permission: require_approval
+  - ref: doc.write
+    kind: mcp
+    risk: medium
+    default_permission: require_approval
+  - ref: ats.update_status
+    kind: mcp
+    risk: critical
+    default_permission: require_approval
+
+agents:
+  - id: recruiter
+    role: planner
+    goal: Plan the screening process.
+    prompt_ref: prompts/packs/hr/recruiter.md
+    tools: [ats.search, ats.read_candidate]
+    permissions:
+      ats.search: allow
+      ats.read_candidate: allow
+    output_contract:
+      type: object
+      required: [shortlist_plan]
+
+  - id: candidate_screener
+    role: executor
+    goal: Score candidates and produce a shortlist.
+    prompt_ref: prompts/packs/hr/candidate_screener.md
+    tools: [ats.read_candidate, doc.write]
+    permissions:
+      ats.read_candidate: allow
+      doc.write: require_approval
+    output_contract:
+      type: object
+      required: [shortlist, rationale]
+
+  - id: interview_planner
+    role: executor
+    goal: Produce an interview plan with questions.
+    prompt_ref: prompts/packs/hr/interview_planner.md
+    tools: [calendar.create, doc.write]
+    permissions:
+      calendar.create: require_approval
+      doc.write: require_approval
+    output_contract:
+      type: object
+      required: [interview_plan, questions]
+
+  - id: compliance_critic
+    role: critic
+    goal: Verify the result is compliant with policies.
+    prompt_ref: prompts/packs/hr/compliance_critic.md
+    tools: [ats.read_candidate]
+    permissions:
+      ats.read_candidate: allow
+    output_contract:
+      type: object
+      required: [verdict, reasons]
+
+workflows:
+  - id: screen_workflow
+    objective_match: screen_candidates
+    phases:
+      - id: plan
+        agent: recruiter
+        outputs: [shortlist_plan]
+      - id: screen
+        agent: candidate_screener
+        requires_approval: true
+        outputs: [shortlist, rationale]
+      - id: review
+        agent: compliance_critic
+        outputs: [verdict, reasons]
+
+  - id: plan_interview_workflow
+    objective_match: plan_interview
+    phases:
+      - id: plan_interview
+        agent: interview_planner
+        outputs: [interview_plan, questions]
+        requires_approval: true
+      - id: review
+        agent: compliance_critic
+        outputs: [verdict, reasons]
+
+quality_gates:
+  - id: compliance_passes
+    condition: "verdict == 'PASS'"
+    on_fail: replan
+
+outputs:
+  - id: hr_summary
+    type: markdown
+    includes: [shortlist, rationale, interview_plan, reasons]
+
+tests:
+  - id: hr_pack_validate
+    objective: "Screen candidates for senior backend role"
+    expected:
+      - "Pack validates"
+      - "Workflow compiles"

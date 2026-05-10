@@ -1,0 +1,82 @@
+openapi: 3.0.3
+info:
+  title: Neuronium Runtime API
+  version: 0.1.0
+  description: |
+    Specification of the headless runtime API for Neuronium.
+    Not implemented in v0.1; this document declares the planned contract.
+
+paths:
+  /v1/health:
+    get:
+      summary: Liveness / readiness
+      responses:
+        "200":
+          description: ok
+
+  /v1/packs:
+    get:
+      summary: List installed workflow packs
+      responses:
+        "200":
+          description: array of PackSummary
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PackSummary"
+
+  /v1/packs/{id}:
+    get:
+      summary: Show a pack
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: pack object
+
+  /v1/runs:
+    post:
+      summary: Start a new run from an objective
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [objective]
+              properties:
+                objective: { type: string }
+                pack: { type: string }
+                inputs: { type: object, additionalProperties: true }
+                mock: { type: boolean, default: false }
+      responses:
+        "201":
+          description: run created
+
+  /v1/runs/{run_id}/events:
+    get:
+      summary: Stream run events via SSE
+      parameters:
+        - in: path
+          name: run_id
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: text/event-stream
+
+components:
+  schemas:
+    PackSummary:
+      type: object
+      required: [id, name, version, domain]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        version: { type: string }
+        domain: { type: string }

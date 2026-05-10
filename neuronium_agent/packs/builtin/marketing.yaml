@@ -1,0 +1,142 @@
+pack:
+  id: marketing
+  name: Marketing Workflow Pack
+  version: "0.1.0"
+  schema_version: "0.1"
+  compatible_neuronium: ">=0.1.0"
+  domain: marketing
+  description: Plans and reviews marketing campaigns end to end.
+
+objectives:
+  - id: create_campaign
+    user_phrases:
+      - "create a campaign"
+      - "marketing campaign"
+      - "campaign plan"
+      - "create a marketing campaign"
+    expected_outcomes:
+      - audience defined
+      - channels selected
+      - copy drafted
+      - performance plan stated
+
+  - id: analyze_audience
+    user_phrases:
+      - "analyze audience"
+      - "target audience"
+      - "audience segmentation"
+    expected_outcomes:
+      - segments identified
+      - personas described
+
+tools:
+  - ref: web.search
+    kind: mcp
+    risk: low
+  - ref: analytics.read
+    kind: mcp
+    risk: low
+  - ref: crm.segment_read
+    kind: mcp
+    risk: medium
+  - ref: doc.write
+    kind: mcp
+    risk: medium
+    default_permission: require_approval
+  - ref: campaign.publish
+    kind: mcp
+    risk: critical
+    default_permission: require_approval
+
+agents:
+  - id: audience_researcher
+    role: researcher
+    goal: Identify audience segments and personas.
+    prompt_ref: prompts/packs/marketing/audience_researcher.md
+    tools: [web.search, analytics.read, crm.segment_read]
+    permissions:
+      web.search: allow
+      analytics.read: allow
+      crm.segment_read: allow
+    output_contract:
+      type: object
+      required: [segments, personas]
+
+  - id: campaign_planner
+    role: planner
+    goal: Plan the campaign structure (audience, channels, milestones).
+    prompt_ref: prompts/packs/marketing/campaign_planner.md
+    tools: [analytics.read, doc.write]
+    permissions:
+      analytics.read: allow
+      doc.write: require_approval
+    output_contract:
+      type: object
+      required: [campaign_plan, milestones]
+
+  - id: copywriter
+    role: executor
+    goal: Draft copy for the chosen channels.
+    prompt_ref: prompts/packs/marketing/copywriter.md
+    tools: [doc.write]
+    permissions:
+      doc.write: require_approval
+    output_contract:
+      type: object
+      required: [copy_drafts]
+
+  - id: performance_critic
+    role: critic
+    goal: Check the campaign meets brand and performance constraints.
+    prompt_ref: prompts/packs/marketing/performance_critic.md
+    tools: [analytics.read]
+    permissions:
+      analytics.read: allow
+    output_contract:
+      type: object
+      required: [verdict, reasons]
+
+workflows:
+  - id: create_campaign_workflow
+    objective_match: create_campaign
+    phases:
+      - id: research_audience
+        agent: audience_researcher
+        outputs: [segments, personas]
+      - id: plan_campaign
+        agent: campaign_planner
+        outputs: [campaign_plan, milestones]
+      - id: draft_copy
+        agent: copywriter
+        requires_approval: true
+        outputs: [copy_drafts]
+      - id: review
+        agent: performance_critic
+        outputs: [verdict, reasons]
+
+  - id: analyze_audience_workflow
+    objective_match: analyze_audience
+    phases:
+      - id: research_audience
+        agent: audience_researcher
+        outputs: [segments, personas]
+      - id: review
+        agent: performance_critic
+        outputs: [verdict, reasons]
+
+quality_gates:
+  - id: critic_approves
+    condition: "verdict == 'PASS'"
+    on_fail: replan
+
+outputs:
+  - id: campaign_summary
+    type: markdown
+    includes: [campaign_plan, milestones, copy_drafts, reasons]
+
+tests:
+  - id: marketing_pack_validate
+    objective: "Create a marketing campaign for product launch"
+    expected:
+      - "Pack validates"
+      - "Workflow compiles"

@@ -1,0 +1,49 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "neuronium-agent"
+version = "0.1.0"
+description = "Neuronium Super Agent Platform with Applied Workflow Packs"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "Apache-2.0" }
+authors = [
+    { name = "Dataism Lab", email = "team@dataism.dev" },
+]
+dependencies = [
+    "pydantic>=2.0",
+    "pyyaml>=6.0",
+    "click>=8.0",
+    "rich>=13.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.21",
+]
+langgraph = [
+    "langgraph>=0.0.20",
+]
+
+[project.scripts]
+neuronium-agent = "neuronium_agent.cli.main:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["neuronium_agent*"]
+
+[tool.setuptools.package-data]
+"neuronium_agent.packs.builtin" = ["*.yaml"]
+"neuronium_agent.packs.templates" = ["*.md"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+markers = [
+    "unit: unit tests",
+    "integration: integration tests",
+    "e2e: end-to-end tests",
+]

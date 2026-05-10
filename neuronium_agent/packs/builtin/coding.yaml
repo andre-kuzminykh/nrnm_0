@@ -1,0 +1,215 @@
+pack:
+  id: coding
+  name: Coding Workflow Pack
+  version: "0.1.0"
+  schema_version: "0.1"
+  compatible_neuronium: ">=0.1.0"
+  domain: software_engineering
+  description: Helps analyze, edit, test and review code repositories.
+
+objectives:
+  - id: fix_bug
+    user_phrases:
+      - "fix this bug"
+      - "fix the bug"
+      - "tests are failing"
+      - "fix failing test"
+      - "fix failing tests"
+      - "debug this issue"
+    expected_outcomes:
+      - bug root cause identified
+      - minimal code patch created
+      - tests pass
+      - summary produced
+
+  - id: review_changes
+    user_phrases:
+      - "review this code"
+      - "review changes"
+      - "code review"
+    expected_outcomes:
+      - changes summarized
+      - issues identified
+      - verdict produced
+
+tools:
+  - ref: fs.read
+    kind: mcp
+    risk: low
+  - ref: fs.edit
+    kind: mcp
+    risk: high
+    default_permission: require_approval
+  - ref: patch.apply
+    kind: mcp
+    risk: high
+    default_permission: require_approval
+  - ref: grep.search
+    kind: mcp
+    risk: low
+  - ref: glob.search
+    kind: mcp
+    risk: low
+  - ref: git.status
+    kind: mcp
+    risk: low
+  - ref: git.diff
+    kind: mcp
+    risk: low
+  - ref: shell.run
+    kind: mcp
+    risk: critical
+    default_permission: require_approval
+  - ref: test.run
+    kind: mcp
+    risk: medium
+    default_permission: require_approval
+
+agents:
+  - id: code_planner
+    role: planner
+    goal: Build a minimal plan to investigate and fix the issue.
+    model: smart
+    prompt_ref: prompts/packs/coding/coding_planner.md
+    tools: [fs.read, grep.search, glob.search, git.status]
+    permissions:
+      fs.read: allow
+      grep.search: allow
+      glob.search: allow
+      git.status: allow
+    memory_scope: project
+    context_budget_tokens: 12000
+    output_contract:
+      type: object
+      required: [plan, files_to_inspect, risks]
+    acceptance_criteria:
+      - "Plan must list 1-7 ordered steps"
+      - "Risks must include at least one bullet"
+
+  - id: code_researcher
+    role: researcher
+    goal: Read the implicated files and identify the root cause.
+    model: smart
+    prompt_ref: prompts/packs/coding/code_researcher.md
+    tools: [fs.read, grep.search, glob.search, git.diff]
+    permissions:
+      fs.read: allow
+      grep.search: allow
+      glob.search: allow
+      git.diff: allow
+    memory_scope: project
+    context_budget_tokens: 16000
+    output_contract:
+      type: object
+      required: [root_cause, snippets]
+    acceptance_criteria:
+      - "Root cause is a single paragraph"
+      - "Snippets reference file paths"
+
+  - id: code_editor
+    role: executor
+    goal: Produce a minimal patch that addresses the root cause.
+    model: smart
+    prompt_ref: prompts/packs/coding/code_editor.md
+    tools: [fs.read, fs.edit, patch.apply]
+    permissions:
+      fs.read: allow
+      fs.edit: require_approval
+      patch.apply: require_approval
+    memory_scope: project
+    context_budget_tokens: 16000
+    output_contract:
+      type: object
+      required: [patch_summary, changed_files]
+
+  - id: test_runner
+    role: executor
+    goal: Run the relevant tests and report status.
+    model: fast
+    prompt_ref: prompts/packs/coding/test_runner.md
+    tools: [shell.run, test.run, fs.read]
+    permissions:
+      shell.run: require_approval
+      test.run: require_approval
+      fs.read: allow
+    memory_scope: run
+    context_budget_tokens: 8000
+    output_contract:
+      type: object
+      required: [test_result]
+
+  - id: code_reviewer
+    role: critic
+    goal: Approve the changes only when tests pass and risks are addressed.
+    model: critic
+    prompt_ref: prompts/packs/coding/code_reviewer.md
+    tools: [fs.read, git.diff]
+    permissions:
+      fs.read: allow
+      git.diff: allow
+    memory_scope: run
+    context_budget_tokens: 8000
+    output_contract:
+      type: object
+      required: [verdict, reasons]
+
+workflows:
+  - id: fix_bug_workflow
+    objective_match: fix_bug
+    phases:
+      - id: plan
+        agent: code_planner
+        outputs: [plan, files_to_inspect, risks]
+      - id: research
+        agent: code_researcher
+        outputs: [root_cause, snippets]
+      - id: edit
+        agent: code_editor
+        requires_approval: true
+        outputs: [patch_summary, changed_files]
+      - id: test
+        agent: test_runner
+        outputs: [test_result]
+      - id: review
+        agent: code_reviewer
+        outputs: [verdict, reasons]
+
+  - id: review_workflow
+    objective_match: review_changes
+    phases:
+      - id: collect_diff
+        agent: code_researcher
+        outputs: [diff_summary]
+      - id: review
+        agent: code_reviewer
+        outputs: [verdict, reasons]
+
+quality_gates:
+  - id: tests_must_pass
+    condition: "test_result.get('status') == 'passed'"
+    on_fail: replan
+  - id: review_must_pass
+    condition: "verdict == 'PASS'"
+    on_fail: replan
+
+outputs:
+  - id: final_summary
+    type: markdown
+    includes:
+      - changed_files
+      - test_result
+      - risks
+      - reasons
+
+tests:
+  - id: coding_pack_fix_bug_e2e
+    objective: "Fix failing tests in this repository"
+    expected:
+      - "Workflow reaches test phase"
+      - "Critic phase runs"
+      - "Final outcome is produced"
+  - id: coding_pack_compile
+    objective: "Compile coding pack into runtime definitions"
+    expected:
+      - "Compilation succeeds"
+      - "IR template is produced"
