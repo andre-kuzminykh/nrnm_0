@@ -27,6 +27,9 @@ dev = [
 langgraph = [
     "langgraph>=0.0.20",
 ]
+raganything = [
+    "raganything[all]>=0.1",
+]
 
 [project.scripts]
 neuronium-agent = "neuronium_agent.cli.main:main"

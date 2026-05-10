@@ -62,7 +62,14 @@ neuronium-agent packs test <id>               # run a pack's mock tests
 neuronium-agent packs init <name>             # scaffold a new pack
 neuronium-agent packs generate <template.md> --out path/to/pack.yaml --id mypack
 
-neuronium-agent objective run "<text>" [--pack <id>] [--mock] [--json]
+neuronium-agent memory backends               # list registered memory backends
+neuronium-agent memory diagnostics --backend raganything
+neuronium-agent memory ingest <path|text> --backend raganything --pack coding
+neuronium-agent memory query "<text>" --backend mock --top-k 5
+
+neuronium-agent objective run "<text>" [--pack <id>] [--mock] [--json] \
+    [--memory-backend mock|raganything] [--memory-working-dir ./rag] \
+    [--memory-parser mineru|docling|paddleocr] [--memory-query-mode hybrid]
 neuronium-agent code "<text>"                 # coding-pack entry point
 neuronium-agent doctor                        # preflight checks
 ```
@@ -140,11 +147,34 @@ Full specifications live in `docs/specs/`:
 | `test_matrix.md` | Test ↔ requirement matrix |
 | `delivery_plan.md` | v0.1 and v0.2+ roadmap |
 
+## Memory backends (RAG)
+
+The memory layer is pluggable. Two backends ship:
+
+- `mock` — deterministic GraphRAG with golden fixtures (default, used in `--mock` runs and CI).
+- `raganything` — adapter for [HKUDS/RAG-Anything](https://github.com/HKUDS/RAG-Anything), enabling real multimodal RAG over PDF / Office / image / text. Optional dependency: `pip install "neuronium-agent[raganything]"` (pulls in `lightrag`, `mineru` and friends).
+
+Selection example:
+
+```python
+from neuronium_agent import run_objective
+from neuronium_agent.memory import MemoryConfig
+
+result = run_objective(
+    "Summarize the design doc",
+    pack="coding",
+    memory_config=MemoryConfig(backend="raganything", working_dir="./rag",
+                               parser="mineru", query_mode="hybrid"),
+)
+```
+
+When `raganything` is not installed, the backend remains importable but reports `ready=False`; the run continues to work using the mock backend. `neuronium-agent doctor` reports the install status.
+
 ## Known limitations (v0.1)
 
 - The LangGraph backend is an in-process executor with LangGraph-compatible semantics. v0.2 will swap in real LangGraph behind the same `CompiledGraph` interface.
 - MCP integration is mocked; the lifecycle/spec is documented and ready for a real adapter.
-- GraphRAG uses golden fixtures; v0.2 brings vector store and entity extraction.
+- The mock GraphRAG uses golden fixtures. Real retrieval is available through the RAG-Anything backend when its optional dependencies are installed; CI exercises the adapter via injected fakes.
 - HTTP server + SSE + OpenAPI are specified, not implemented.
 - Replay is specified but not yet a `cli replay` command.
 

@@ -25,6 +25,7 @@ from neuronium_agent.ir.models import (
     ToolNode,
 )
 from neuronium_agent.memory.artifact_graph import Artifact, ArtifactGraph
+from neuronium_agent.memory.backend import MemoryBackend, MemoryConfig, build_backend
 from neuronium_agent.memory.graphrag import MockGraphRAG, RetrievalQuery
 from neuronium_agent.providers.base import ModelRequest
 from neuronium_agent.providers.registry import ModelRegistry, default_registry
@@ -67,7 +68,7 @@ class Runtime(BaseModel):
     models: ModelRegistry
     tools: ToolRegistry
     policy: PolicyEngine
-    memory: MockGraphRAG
+    memory: Any  # MemoryBackend protocol (mock | raganything | custom)
     artifacts: ArtifactGraph
     agents: Dict[str, AgentInstance]
     factory: AgentFactory
@@ -341,11 +342,17 @@ def build_default_runtime(
     factory: AgentFactory,
     auto_approve: bool = True,
     force_failure_first: bool = False,
+    memory: Optional[MemoryBackend] = None,
+    memory_config: Optional[MemoryConfig] = None,
 ) -> Runtime:
     models = default_registry(force_failure_first=force_failure_first)
     tool_registry = ToolRegistry()
     MockMCP().register_default(tool_registry)
-    memory = MockGraphRAG()
+    if memory is None:
+        try:
+            memory = build_backend(memory_config or MemoryConfig())
+        except Exception:  # noqa: BLE001
+            memory = MockGraphRAG()
     artifacts = ArtifactGraph()
     gate = HumanGateController(auto_approve=auto_approve)
     return Runtime(

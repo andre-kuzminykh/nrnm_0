@@ -12,7 +12,8 @@ from neuronium_agent.agents.factory import AgentFactory
 from neuronium_agent.agents.models import AgentInstance
 from neuronium_agent.ir.compiler import compile_program
 from neuronium_agent.ir.models import Program
-from neuronium_agent.memory.graphrag import RetrievalQuery
+from neuronium_agent.memory.backend import MemoryBackend, MemoryConfig, build_backend
+from neuronium_agent.memory.graphrag import MockGraphRAG, RetrievalQuery
 from neuronium_agent.packs.compiler import CompiledPack
 from neuronium_agent.packs.registry import PackRegistry
 from neuronium_agent.runtime.backend import Runtime, build_default_runtime
@@ -52,11 +53,15 @@ class ObjectiveRunner:
         trace_dir: Optional[str] = None,
         auto_approve: bool = True,
         force_failure_first: bool = False,
+        memory: Optional[MemoryBackend] = None,
+        memory_config: Optional[MemoryConfig] = None,
     ) -> None:
         self.registry = registry or PackRegistry()
         self.trace_dir = trace_dir
         self.auto_approve = auto_approve
         self.force_failure_first = force_failure_first
+        self.memory = memory
+        self.memory_config = memory_config or MemoryConfig()
 
     def _select_pack(self, objective: str, pack_id: Optional[str]) -> CompiledPack:
         if pack_id:
@@ -126,20 +131,39 @@ class ObjectiveRunner:
                 "workflows": list(compiled.ir_templates.keys()),
             },
         )
-        # Memory: golden retrieval
-        memory = None
+        # Memory: select backend (explicit > config > mock fallback).
+        memory: MemoryBackend
+        if self.memory is not None:
+            memory = self.memory
+        else:
+            try:
+                memory = build_backend(self.memory_config)
+            except Exception:  # noqa: BLE001
+                memory = MockGraphRAG()
+        events.emit(
+            "memory.initialized",
+            {
+                "backend": getattr(memory, "name", "unknown"),
+                "ready": getattr(memory, "ready", True),
+            },
+        )
         try:
-            from neuronium_agent.memory.graphrag import MockGraphRAG
-            memory = MockGraphRAG()
             result = memory.retrieve(
                 RetrievalQuery(text=objective, top_k=5), pack_id=compiled.pack.id
             )
             events.emit(
                 "memory.retrieved",
-                {"entities": [e.id for e in result.entities], "snippets": len(result.snippets)},
+                {
+                    "entities": [e.id for e in result.entities],
+                    "snippets": len(result.snippets),
+                    "backend": getattr(memory, "name", "unknown"),
+                },
             )
-        except Exception:  # noqa: BLE001
-            pass
+        except Exception as exc:  # noqa: BLE001
+            events.emit(
+                "memory.retrieval_failed",
+                {"error": str(exc), "backend": getattr(memory, "name", "unknown")},
+            )
 
         # Build agent team and policy
         factory = AgentFactory(run_id=run.id, events=events)
@@ -158,9 +182,9 @@ class ObjectiveRunner:
             factory=factory,
             auto_approve=self.auto_approve,
             force_failure_first=self.force_failure_first,
+            memory=memory,
+            memory_config=self.memory_config,
         )
-        if memory is not None:
-            runtime.memory = memory
 
         # Select & compile IR
         program = self._select_program(compiled, objective)

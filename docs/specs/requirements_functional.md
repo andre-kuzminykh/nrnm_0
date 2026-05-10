@@ -93,6 +93,17 @@
 - **NR-FR-GRAG-004** Evaluate artifact-reference preservation.
 - **NR-FR-GRAG-005** Emit retrieval diagnostics.
 
+## RAG-Anything integration
+
+- **NR-FR-GRAG-010** Provide a pluggable `MemoryBackend` protocol with `retrieve`, `ingest`, `write_back`, `diagnostics`.
+- **NR-FR-GRAG-011** Register `mock` and `raganything` backends by default.
+- **NR-FR-GRAG-012** Continue to function (mock fallback) when `raganything` is not installed.
+- **NR-FR-GRAG-013** Emit `memory.initialized`, `memory.retrieved`, `memory.retrieval_failed` events with `backend` and `ready` fields.
+- **NR-FR-GRAG-014** Allow injecting a custom RAG-Anything client / client_factory for testing and deployment.
+- **NR-FR-GRAG-015** Expose CLI commands `memory backends`, `memory diagnostics`, `memory ingest`, `memory query`.
+- **NR-FR-GRAG-016** Accept memory backend selection via CLI on `objective run` and `code`.
+- **NR-FR-GRAG-017** Report `raganything` install status from `doctor`.
+
 ## Configuration
 
 - **NR-FR-CFG-001** Built-in defaults shall always be available.

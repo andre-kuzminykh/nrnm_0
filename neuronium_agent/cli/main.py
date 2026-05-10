@@ -13,6 +13,13 @@ from rich.console import Console
 from rich.table import Table
 
 from neuronium_agent import __version__
+from neuronium_agent.memory.backend import (
+    IngestDocument,
+    MemoryConfig,
+    build_backend,
+    list_backends,
+)
+from neuronium_agent.memory.graphrag import RetrievalQuery
 from neuronium_agent.packs import (
     PackError,
     PackValidationError,
@@ -234,6 +241,132 @@ def packs_generate(template_path: str, out_path: str, pack_id: str) -> None:
     console.print(f"[green]generated[/green] {out_path}")
 
 
+# ---------- memory ----------
+
+
+def _memory_config_from_options(
+    backend: str,
+    working_dir: Optional[str],
+    parser: str,
+    query_mode: str,
+) -> MemoryConfig:
+    return MemoryConfig(
+        backend=backend,
+        working_dir=working_dir,
+        parser=parser,
+        query_mode=query_mode,
+    )
+
+
+@cli.group()
+def memory() -> None:
+    """Manage Neuronium memory backends (mock, raganything, ...)."""
+
+
+@memory.command("backends")
+def memory_backends() -> None:
+    """List registered memory backends."""
+    table = Table(title="Memory backends")
+    table.add_column("name")
+    for name in list_backends():
+        table.add_row(name)
+    console.print(table)
+
+
+@memory.command("diagnostics")
+@click.option("--backend", default="mock", help="Backend to query.")
+@click.option("--working-dir", default=None, help="Backend working directory.")
+@click.option("--parser", default="mineru", help="Parser for raganything.")
+@click.option("--query-mode", default="hybrid", help="Query mode (raganything).")
+def memory_diagnostics(
+    backend: str, working_dir: Optional[str], parser: str, query_mode: str
+) -> None:
+    config = _memory_config_from_options(backend, working_dir, parser, query_mode)
+    try:
+        instance = build_backend(config)
+    except KeyError as exc:
+        click.echo(f"error: {exc}", err=True)
+        sys.exit(2)
+    diag = instance.diagnostics()
+    click.echo(json.dumps(diag, indent=2, default=str))
+
+
+@memory.command("ingest")
+@click.argument("path", type=click.Path(exists=True))
+@click.option("--backend", default="mock")
+@click.option("--working-dir", default=None)
+@click.option("--parser", default="mineru")
+@click.option("--query-mode", default="hybrid")
+@click.option("--pack", "pack_id", default=None, help="Tag documents with a pack id.")
+@click.option("--id", "doc_id", default=None, help="Override document id.")
+def memory_ingest(
+    path: str,
+    backend: str,
+    working_dir: Optional[str],
+    parser: str,
+    query_mode: str,
+    pack_id: Optional[str],
+    doc_id: Optional[str],
+) -> None:
+    """Ingest a file or text snippet into a memory backend."""
+    config = _memory_config_from_options(backend, working_dir, parser, query_mode)
+    instance = build_backend(config)
+    is_file = os.path.isfile(path)
+    if is_file:
+        # For mock backend (and any text-aware backend), read the contents.
+        text = None
+        if backend == "mock":
+            try:
+                text = open(path, "r", encoding="utf-8").read()
+            except UnicodeDecodeError:
+                text = None
+        doc = IngestDocument(
+            id=doc_id or os.path.basename(path),
+            path=path,
+            text=text,
+            pack_id=pack_id,
+        )
+    else:
+        doc = IngestDocument(id=doc_id or "inline", text=path, pack_id=pack_id)
+    result = instance.ingest([doc])
+    click.echo(json.dumps(result, indent=2, default=str))
+
+
+@memory.command("query")
+@click.argument("text")
+@click.option("--backend", default="mock")
+@click.option("--working-dir", default=None)
+@click.option("--parser", default="mineru")
+@click.option("--query-mode", default="hybrid")
+@click.option("--pack", "pack_id", default=None)
+@click.option("--top-k", default=5)
+def memory_query(
+    text: str,
+    backend: str,
+    working_dir: Optional[str],
+    parser: str,
+    query_mode: str,
+    pack_id: Optional[str],
+    top_k: int,
+) -> None:
+    """Issue a retrieval query against a memory backend."""
+    config = _memory_config_from_options(backend, working_dir, parser, query_mode)
+    instance = build_backend(config)
+    result = instance.retrieve(RetrievalQuery(text=text, top_k=top_k), pack_id=pack_id)
+    click.echo(
+        json.dumps(
+            {
+                "backend": getattr(instance, "name", backend),
+                "ready": getattr(instance, "ready", True),
+                "entities": [e.model_dump() for e in result.entities],
+                "snippets": result.snippets,
+            },
+            indent=2,
+            default=str,
+        )
+    )
+
+
 # ---------- objective ----------
 
 
@@ -250,6 +383,10 @@ def objective() -> None:
 @click.option("--auto-approve/--no-auto-approve", default=None, help="Auto-approve gates.")
 @click.option("--input", "extra_inputs", multiple=True, help="key=value run input.")
 @click.option("--json", "output_json", is_flag=True, help="Emit machine-readable JSON.")
+@click.option("--memory-backend", default="mock", help="Memory backend name (mock|raganything|...).")
+@click.option("--memory-working-dir", default=None, help="Backend working directory.")
+@click.option("--memory-parser", default="mineru", help="Parser for raganything.")
+@click.option("--memory-query-mode", default="hybrid", help="Query mode (raganything).")
 def objective_run(
     objective_text: str,
     pack_id: Optional[str],
@@ -258,6 +395,10 @@ def objective_run(
     auto_approve: Optional[bool],
     extra_inputs: tuple,
     output_json: bool,
+    memory_backend: str,
+    memory_working_dir: Optional[str],
+    memory_parser: str,
+    memory_query_mode: str,
 ) -> None:
     """Run a free-text objective through the platform."""
     parsed_inputs = {}
@@ -268,9 +409,13 @@ def objective_run(
         parsed_inputs[k.strip()] = v.strip()
     if auto_approve is None:
         auto_approve = mock
+    memory_config = _memory_config_from_options(
+        memory_backend, memory_working_dir, memory_parser, memory_query_mode
+    )
     runner = ObjectiveRunner(
         trace_dir=trace_dir,
         auto_approve=auto_approve,
+        memory_config=memory_config,
     )
     try:
         result = runner.run(objective_text, pack_id=pack_id, inputs=parsed_inputs)
@@ -312,10 +457,28 @@ def objective_run(
 @click.option("--pack", "pack_id", default="coding", help="Coding pack id.")
 @click.option("--mock/--no-mock", default=True, help="Use deterministic mock providers.")
 @click.option("--trace-dir", default=".neuronium/traces", help="Trace directory.")
-def code(objective_text: Optional[str], pack_id: str, mock: bool, trace_dir: str) -> None:
+@click.option("--memory-backend", default="mock")
+@click.option("--memory-working-dir", default=None)
+@click.option("--memory-parser", default="mineru")
+@click.option("--memory-query-mode", default="hybrid")
+def code(
+    objective_text: Optional[str],
+    pack_id: str,
+    mock: bool,
+    trace_dir: str,
+    memory_backend: str,
+    memory_working_dir: Optional[str],
+    memory_parser: str,
+    memory_query_mode: str,
+) -> None:
     """Interactive coding mode (single-shot in v0.1)."""
     text = objective_text or "Help me with this codebase"
-    runner = ObjectiveRunner(trace_dir=trace_dir, auto_approve=mock)
+    memory_config = _memory_config_from_options(
+        memory_backend, memory_working_dir, memory_parser, memory_query_mode
+    )
+    runner = ObjectiveRunner(
+        trace_dir=trace_dir, auto_approve=mock, memory_config=memory_config
+    )
     try:
         result = runner.run(text, pack_id=pack_id)
     except Exception as exc:  # noqa: BLE001
@@ -338,6 +501,17 @@ def doctor() -> None:
     console.rule("doctor")
     console.print(f"version: {__version__}")
     console.print(f"installed packs: {', '.join(registry.list_ids()) or '(none)'}")
+    console.print(f"memory backends: {', '.join(list_backends())}")
+    try:
+        import importlib
+
+        importlib.import_module("raganything")
+        console.print("[green]raganything: installed[/green]")
+    except Exception:  # noqa: BLE001
+        console.print(
+            "[yellow]raganything: not installed[/yellow] "
+            "(install with `pip install 'raganything[all]'` to enable RAG-Anything backend)"
+        )
     leaks = []
     for env_key in ("OPENAI_API_KEY", "ANTHROPIC_API_KEY"):
         if env_key in os.environ:

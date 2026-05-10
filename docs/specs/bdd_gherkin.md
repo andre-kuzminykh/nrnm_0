@@ -113,3 +113,46 @@ Feature: Secret redaction
     When trace is exported
     Then the API key should be redacted
 ```
+
+## Memory / RAG-Anything
+
+```gherkin
+@NR-BDD-MEM-001 @NR-FR-GRAG-010 @NR-FR-GRAG-011 @NR-UT-MEM-001
+Feature: Pluggable memory backends
+  Scenario: List backends
+    When the user runs "neuronium-agent memory backends"
+    Then the output should include "mock" and "raganything"
+```
+
+```gherkin
+@NR-BDD-MEM-002 @NR-FR-GRAG-012 @NR-FR-GRAG-017 @NR-UT-MEM-002
+Feature: Graceful fallback without raganything
+  Scenario: raganything not installed
+    Given the raganything package is not installed
+    When a memory backend named "raganything" is built
+    Then the backend should report ready=False
+    And doctor should warn that raganything is not installed
+```
+
+```gherkin
+@NR-BDD-MEM-003 @NR-FR-GRAG-014 @NR-UT-MEM-003 @NR-IT-MEM-001
+Feature: RAG-Anything adapter dispatches documents
+  Scenario: Path triggers process_document_complete
+    Given an injected RAG-Anything fake client
+    When a document with a file path is ingested
+    Then the adapter should call process_document_complete
+    And the adapter should record the document as ingested
+
+  Scenario: Inline text triggers insert_content_list
+    Given an injected RAG-Anything fake client
+    When a document with inline text is ingested
+    Then the adapter should call insert_content_list
+```
+
+```gherkin
+@NR-BDD-MEM-004 @NR-FR-GRAG-013 @NR-FR-GRAG-016 @NR-IT-MEM-002
+Feature: Memory selection event
+  Scenario: Objective run records selected backend
+    Given the user runs "neuronium-agent objective run '...' --memory-backend mock"
+    Then a memory.initialized event with backend=mock and ready=true should be emitted
+```

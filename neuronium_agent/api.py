@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
+from neuronium_agent.memory.backend import MemoryBackend, MemoryConfig
 from neuronium_agent.packs.compiler import CompiledPack
 from neuronium_agent.packs.registry import PackRegistry
 from neuronium_agent.runtime.objective_runner import ObjectiveRunner, RunResult
@@ -40,11 +41,15 @@ def run_objective(
     inputs: Optional[Dict[str, Any]] = None,
     trace_dir: Optional[str] = None,
     force_failure_first: bool = False,
+    memory: Optional[MemoryBackend] = None,
+    memory_config: Optional[MemoryConfig] = None,
 ) -> RunResult:
     """Run an objective with the chosen pack.
 
     `mock=True` is the default in v0.1: it uses the deterministic mock model
-    provider and mock MCP tools.
+    provider and mock MCP tools. Memory defaults to the mock GraphRAG backend
+    but can be switched to `raganything` (or any registered backend) by passing
+    a `MemoryConfig` or a pre-built `memory` instance.
     """
     if auto_approve is None:
         auto_approve = mock
@@ -52,5 +57,7 @@ def run_objective(
         trace_dir=trace_dir,
         auto_approve=auto_approve,
         force_failure_first=force_failure_first,
+        memory=memory,
+        memory_config=memory_config,
     )
     return runner.run(objective, pack_id=pack, inputs=inputs)

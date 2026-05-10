@@ -96,7 +96,7 @@ Legend: **MVP** implemented in v0.1 (mock mode), **SPEC** specified only, **PLAN
 
 | ID | Name | Status |
 | --- | --- | --- |
-| NR-F-080 | GraphRAG memory store | MVP (mock) |
+| NR-F-080 | GraphRAG memory store | MVP (mock + RAG-Anything adapter) |
 | NR-F-081 | Entity and relationship extraction | SPEC |
 | NR-F-082 | Artifact graph | MVP |
 | NR-F-083 | Prior run retrieval | MVP |
@@ -104,6 +104,8 @@ Legend: **MVP** implemented in v0.1 (mock mode), **SPEC** specified only, **PLAN
 | NR-F-085 | Context compaction | MVP |
 | NR-F-086 | Trace-aware summarization | SPEC |
 | NR-F-087 | Artifact-preserving summaries | SPEC |
+| NR-F-088 | Pluggable memory backend protocol (mock / raganything / custom) | MVP |
+| NR-F-089 | Document ingestion API (file + inline text) | MVP |
 
 ## Operational discipline
 

@@ -53,3 +53,17 @@ Every requirement maps to at least one test. Tests run in mock mode only.
 | NR-GRAG-EVAL-001 | golden retrieval fixture |
 | NR-GRAG-EVAL-002 | entity linking fixture |
 | NR-GRAG-EVAL-003 | artifact preservation fixture |
+
+## Memory / RAG-Anything
+
+| ID | Subject | Requirement |
+| --- | --- | --- |
+| NR-UT-MEM-001 | Backend registry exposes mock and raganything | NR-FR-GRAG-010, NR-FR-GRAG-011 |
+| NR-UT-MEM-002 | Graceful fallback when raganything missing | NR-FR-GRAG-012 |
+| NR-UT-MEM-003 | Adapter dispatches path → process_document_complete and text → insert_content_list | NR-FR-GRAG-014 |
+| NR-UT-MEM-004 | Adapter retrieval coerces upstream str/dict/None | NR-FR-GRAG-014 |
+| NR-UT-MEM-005 | MockGraphRAG ingest writes searchable entities | NR-F-089 |
+| NR-IT-MEM-001 | Runtime selects memory backend from config and emits memory.initialized | NR-FR-GRAG-013, NR-FR-GRAG-016 |
+| NR-IT-MEM-002 | Runtime emits memory.retrieval_failed when backend raises | NR-FR-GRAG-013 |
+| NR-E2E-MEM-001 | CLI memory diagnostics returns JSON | NR-FR-GRAG-015 |
+| NR-E2E-MEM-002 | CLI memory ingest + query roundtrip on mock backend | NR-FR-GRAG-015 |
